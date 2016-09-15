@@ -47,38 +47,41 @@ public class SolServiceImpl implements SolService {
 
     @Override
     public void addListener(ApplicationId id, PathUpdateListener listener) {
+        // Adds a listener that awaits updated path results from the SOL instance
         listenerMap.get(id).add(listener);
     }
 
     @Override
     public void removeListener(ApplicationId id, PathUpdateListener listener) {
+        // Removes a callback listener for a given app
         listenerMap.get(id).remove(listener);
         if (listenerMap.get(id).isEmpty()) {
-            unregister(id);
+            unregisterApp(id);
         }
     }
 
     @Override
     public void unregisterApp(ApplicationId id) {
+        //Cleanup the app from the list of apps
         tcMap.remove(id);
         listenerMap.remove(id);
     }
 
     @Activate
     protected void activate() {
-        log.info("Started");
+//        log.info("Started");
         running = true;
         new Thread(new SolutionCalculator()).run();
     }
 
     @Deactivate
     protected void deactivate() {
-        log.info("Stopped");
+//        log.info("Stopped");
+        // TODO: do any cleanup that is necessary
     }
 
     private void recompute() {
-        //TODO: Feed the data to SOL instance
-        for ()
+        //TODO: Feed the data to SOL instance via REST(?) API
     }
 
 }
