@@ -32,6 +32,7 @@ public class AppComponent {
 
     @Activate
     protected void activate() {
+
         log.info("Started");
     }
 

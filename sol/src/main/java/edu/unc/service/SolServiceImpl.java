@@ -3,8 +3,12 @@ package edu.unc.service;
 import edu.unc.app.PathUpdateListener;
 import edu.unc.app.TrafficClass;
 import org.apache.felix.scr.annotations.Activate;
+import org.apache.felix.scr.annotations.Component;
 import org.apache.felix.scr.annotations.Deactivate;
+import org.apache.felix.scr.annotations.Service;
 import org.onosproject.core.ApplicationId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -13,7 +17,11 @@ import java.util.Map;
 
 /**
  */
+@Component(immediate = true)
+@Service
 public class SolServiceImpl implements SolService {
+    private final Logger log = LoggerFactory.getLogger(getClass());
+
     protected Map<ApplicationId, List<TrafficClass>> tcMap;
     protected Map<ApplicationId, List<PathUpdateListener>> listenerMap;
     private Boolean running;
@@ -21,9 +29,13 @@ public class SolServiceImpl implements SolService {
     private class SolutionCalculator implements Runnable {
         @Override
         public void run() {
-            while (running)
-                //TODO: wait here
+            while (running) {
+                //TODO: monitor changes to the traffic classes
+                // Upon change, trigger recompute
                 recompute();
+                // TODO: results of recompute should be sent to the apps
+                // using the PathUpdateListener object
+            }
         }
     }
 
@@ -69,15 +81,15 @@ public class SolServiceImpl implements SolService {
 
     @Activate
     protected void activate() {
-//        log.info("Started");
+        log.info("Started");
         running = true;
         new Thread(new SolutionCalculator()).run();
     }
 
     @Deactivate
     protected void deactivate() {
-//        log.info("Stopped");
         // TODO: do any cleanup that is necessary
+        log.info("Stopped");
     }
 
     private void recompute() {
