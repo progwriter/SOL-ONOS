@@ -1,4 +1,4 @@
-package edu.unc.app;
+package edu.unc.sol.app;
 
 import org.onosproject.net.intent.PathIntent;
 

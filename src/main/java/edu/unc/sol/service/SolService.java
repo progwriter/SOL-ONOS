@@ -1,7 +1,7 @@
-package edu.unc.service;
+package edu.unc.sol.service;
 
-import edu.unc.app.PathUpdateListener;
-import edu.unc.app.TrafficClass;
+import edu.unc.sol.app.PathUpdateListener;
+import edu.unc.sol.app.TrafficClass;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.onosproject.core.ApplicationId;

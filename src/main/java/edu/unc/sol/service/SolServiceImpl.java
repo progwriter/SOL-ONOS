@@ -1,22 +1,23 @@
-package edu.unc.service;
+package edu.unc.sol.service;
 
-import edu.unc.app.PathUpdateListener;
-import edu.unc.app.TrafficClass;
-import org.apache.felix.scr.annotations.Activate;
-import org.apache.felix.scr.annotations.Component;
-import org.apache.felix.scr.annotations.Deactivate;
-import org.apache.felix.scr.annotations.Service;
+import edu.unc.sol.app.PathUpdateListener;
+import edu.unc.sol.app.TrafficClass;
+import edu.unc.sol.util.Config;
+import org.apache.felix.scr.annotations.*;
 import org.onosproject.core.ApplicationId;
+import org.onosproject.net.topology.TopologyGraph;
+import org.onosproject.net.topology.TopologyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-/**
- */
+
 @Component(immediate = true)
 @Service
 public class SolServiceImpl implements SolService {
@@ -24,13 +25,16 @@ public class SolServiceImpl implements SolService {
 
     protected Map<ApplicationId, List<TrafficClass>> tcMap;
     protected Map<ApplicationId, List<PathUpdateListener>> listenerMap;
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected TopologyService topologyService;
     private Boolean running;
+    private Client restClient;
 
     private class SolutionCalculator implements Runnable {
         @Override
         public void run() {
             while (running) {
-                //TODO: monitor changes to the traffic classes
+                // TODO: monitor changes to the traffic classes
                 // Upon change, trigger recompute
                 recompute();
                 // TODO: results of recompute should be sent to the apps
@@ -40,9 +44,12 @@ public class SolServiceImpl implements SolService {
     }
 
     public SolServiceImpl() {
+        // Initialize basic structures
         tcMap = new HashMap<>();
         listenerMap = new HashMap<>();
         running = false;
+        restClient = ClientBuilder.newClient();
+
     }
 
     @Override
@@ -83,6 +90,22 @@ public class SolServiceImpl implements SolService {
     protected void activate() {
         log.info("Started");
         running = true;
+
+        // Initialize the rest client
+        // Get the address from an environment variable
+        String solServer = System.getenv(Config.SOL_ENV_VAR);
+        if (solServer == null) {
+            restClient.target(solServer);
+        } else {
+            log.error("No SOL server configured");
+        }
+        // Upon activation, get the topology from the topology service and send it to SOL
+        // using rest API
+        // FIXME: we are running with the implicit assumption that that the topology does not change
+        TopologyGraph topo = topologyService.getGraph(topologyService.currentTopology());
+
+
+        // Start the monitor-solve loop in a new thread
         new Thread(new SolutionCalculator()).run();
     }
 
