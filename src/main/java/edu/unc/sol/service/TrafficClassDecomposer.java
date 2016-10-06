@@ -35,54 +35,42 @@ public class TrafficClassDecomposer {
 
 	//QUESTION: is there only one of each criteria in a TrafficClass's selector's set of criterion?
 	
-	Set<Criterion> set1 = c1.getSelector().criteria();
-	Set<Criterion> set2 = c2.getSelector().criteria();
+	Set<Criterion> criteria_set1 = c1.getSelector().criteria();
+	Set<Criterion> criteria_set2 = c2.getSelector().criteria();
 
-	Criterion.Type source = Criterion.Type.IPV4_SRC;
-	Criterion.Type dest = Criterion.Type.IPV4_DST;
+	Criterion.Type source_criterion_type = Criterion.Type.IPV4_SRC;
+	Criterion.Type dest_criterion_type = Criterion.Type.IPV4_DST;
 
-	//QUESTION: are we trying to compare the source IPs / dst IPs (what is source and what is dst?)
-	
-	IPCriterion source1 = (IPCriterion) c1.getSelector().getCriterion(source);
-	IPCriterion source2 = (IPCriterion) c2.getSelector().getCriterion(source);
-
-	if (source1 == null) logger.info("source 1 is null");
-	if (source2 == null) logger.info("source 2 is null");
+	IpPrefix source_prefix1 = ((IPCriterion) c1.getSelector().getCriterion(source_criterion_type).ip());
+	IpPrefix source_prefix2 = ((IPCriterion) c2.getSelector().getCriterion(source_criterion_type).ip());
 
 	logger.info(source1.toString());
 	logger.info(source2.toString());
 
-	boolean boo1;
+	boolean source_overlap;
 	
 	if (source1 == null || source2 == null) {
-	    boo1 = false;
+	    source_overlap = false;
 	}
 	else {
-	    boo1 = source1.toString().equals(source2.toString());
-	    if (boo1) logger.info("overlap function says true");
-	    else logger.info("overlap function says false");
+	    source_overlap = source_prefix1.contains(source_prefix2) || source_prefix2.contains(source_prefix1);
 	}
 
-	IPCriterion dest1 = (IPCriterion) c1.getSelector().getCriterion(dest);
-	IPCriterion dest2 = (IPCriterion) c2.getSelector().getCriterion(dest);
+	IpPrefix dest_prefix1 = ((IPCriterion) c1.getSelector().getCriterion(source_criterion_type).ip());
+	IpPrefix dest_prefix2 = ((IPCriterion) c2.getSelector().getCriterion(source_criterion_type).ip());
 
-	boolean boo2;
-	
-	if (dest1 == null) logger.info("dest 1 is null");
-	if (dest2 == null) logger.info("dest 2 is null");
+	boolean dest_overlap;
 	
 	if (dest1 == null || dest2 == null) {
-	    boo2 = false;
+	    dest_overlap = false;
 	}
 	else {
-	    boo2 = dest1.toString().equals(dest2.toString());
-	    if (boo2) logger.info("overlap function says dest true");
-	    else logger.info("overlap function says dest false");
+	    dest_overlap = dest_prefix1.contains(dest_prefix2) || dest_prefix2.contains(dest_prefix1);
 	}
-        return boo1 || boo2;
+        return source_overlap || dest_overlap;
     }
 
-    public static Set<TrafficClass> decompose(List<TrafficClass> listOfTrafficClasses) {
+    public static Set<List<TrafficClass>> decompose(List<TrafficClass> listOfTrafficClasses) {
 
 	// TODO: Write a functions that takes a list of traffic classes and if there is any overlap between
         // them, returns "smaller" traffic classes that are non-overlapping.
