@@ -2,13 +2,21 @@ package edu.unc.sol.service;
 
 import edu.unc.sol.app.PathUpdateListener;
 import edu.unc.sol.app.TrafficClass;
+import edu.unc.sol.service.TrafficClassDecomposer;
 import edu.unc.sol.util.Config;
 import org.apache.felix.scr.annotations.*;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.net.topology.TopologyGraph;
 import org.onosproject.net.topology.TopologyService;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficSelector.Builder;
+import org.onosproject.net.flow.criteria.Criterion;
+import org.onosproject.net.flow.criteria.Criterion.Type;
+import org.onosproject.net.flow.criteria.IPCriterion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.onlab.packet.IpPrefix;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
@@ -16,7 +24,9 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-
+import java.util.ArrayList;
+import java.util.Set;
+import java.util.HashSet;
 
 @Component(immediate = true)
 @Service
@@ -87,26 +97,65 @@ public class SolServiceImpl implements SolService {
     }
 
     @Activate
-    protected void activate() {
+    public void activate() { //changed from protected
         log.info("Started");
-        running = true;
+
+	/*
+	log.info("Running Unit Tests");
+
+	IpPrefix p1 = IpPrefix.valueOf(123456,16);
+	IpPrefix p2 = IpPrefix.valueOf(123456,16);
+	
+	TrafficSelector.Builder b1 = DefaultTrafficSelector.builder();
+	TrafficSelector.Builder b2 = DefaultTrafficSelector.builder();
+	b1.matchIPSrc(p1);
+	b2.matchIPSrc(p2);
+	
+	TrafficSelector s1 = b1.build();
+	TrafficSelector s2 = b2.build();
+	TrafficClass c1 = new TrafficClass(s1);
+	TrafficClass c2 = new TrafficClass(s2);
+	log.info("Testing Overlap");
+	if(TrafficClassDecomposer.hasOverlap(c1,c2)) {
+	    log.info("true");
+	}
+	else {
+	    log.info("false");
+	}
+
+	List<TrafficClass> l = new ArrayList<TrafficClass>();	
+	l.add(c1);
+	l.add(c2);
+
+	log.info("Testing Decompose");
+	Set<TrafficClass> set;
+	set = TrafficClassDecomposer.decompose(l);
+	if (set != null) {
+	    log.info(set.toString());
+	}
+	else {
+	    log.info("null");
+	}
+	*/
+	
+	//       running = true;
 
         // Initialize the rest client
         // Get the address from an environment variable
-        String solServer = System.getenv(Config.SOL_ENV_VAR);
-        if (solServer == null) {
-            restClient.target(solServer);
-        } else {
-            log.error("No SOL server configured");
-        }
+	//        String solServer = System.getenv(Config.SOL_ENV_VAR);
+	//        if (solServer == null) {
+	//      restClient.target(solServer);
+	//  } else {
+	//     log.error("No SOL server configured");
+	//  }
         // Upon activation, get the topology from the topology service and send it to SOL
         // using rest API
         // FIXME: we are running with the implicit assumption that that the topology does not change
-        TopologyGraph topo = topologyService.getGraph(topologyService.currentTopology());
+	// TopologyGraph topo = topologyService.getGraph(topologyService.currentTopology());
 
 
         // Start the monitor-solve loop in a new thread
-        new Thread(new SolutionCalculator()).run();
+	//        new Thread(new SolutionCalculator()).run();
     }
 
     @Deactivate

@@ -12,4 +12,8 @@ public class TrafficClass {
 //        this.predicate = p;
     }
 
+    public TrafficSelector getSelector() {
+	return selector;
+    }
+
 }
