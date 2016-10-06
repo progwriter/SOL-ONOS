@@ -29,10 +29,10 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <onos.version>1.6.0</onos.version>
         <!-- Uncomment to generate ONOS app from this module. -->
-        <onos.app.name>SOL</onos.app.name>
+        <onos.app.name>edu.unc.sol</onos.app.name>
         <onos.app.title>SDN optimization layer</onos.app.title>
         <onos.app.origin>University of North Carolina at Chapel Hill</onos.app.origin>
-        <onos.app.category>default</onos.app.category>
+        <onos.app.category>Utility</onos.app.category>
         <!-- <onos.app.url>http://onosproject.org</onos.app.url> -->
         <!-- <onos.app.readme>ONOS OSGi bundle archetype.</onos.app.readme> -->
     </properties>
