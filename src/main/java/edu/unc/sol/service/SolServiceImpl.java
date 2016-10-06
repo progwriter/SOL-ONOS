@@ -97,7 +97,7 @@ public class SolServiceImpl implements SolService {
     }
 
     @Activate
-    public void activate() { //changed from protected
+    protected void activate() {
         log.info("Started");
 
 	/*

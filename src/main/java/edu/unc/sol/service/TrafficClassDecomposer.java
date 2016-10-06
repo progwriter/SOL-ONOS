@@ -3,6 +3,7 @@ package edu.unc.sol.service;
 import edu.unc.sol.app.TrafficClass;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.HashSet;
 import org.slf4j.Logger;
@@ -10,19 +11,12 @@ import org.slf4j.LoggerFactory;
 import org.onosproject.net.flow.criteria.Criterion;
 import org.onosproject.net.flow.criteria.Criterion.Type;
 import org.onosproject.net.flow.criteria.IPCriterion;
+import org.onlab.packet.IpPrefix;
+
 
 public class TrafficClassDecomposer {
 
     final static Logger logger = LoggerFactory.getLogger(TrafficClassDecomposer.class);
-
-    public static Criterion findCriterion(Set<Criterion> s, Criterion.Type val) {
-	for (Criterion c : s) {
-	    if (c.type() == val) {
-		return c;
-	    }
-	}
-	return null;
-    }
     
     public static boolean hasOverlap(TrafficClass c1, TrafficClass c2) {
 
@@ -41,30 +35,31 @@ public class TrafficClassDecomposer {
 	Criterion.Type source_criterion_type = Criterion.Type.IPV4_SRC;
 	Criterion.Type dest_criterion_type = Criterion.Type.IPV4_DST;
 
-	IpPrefix source_prefix1 = ((IPCriterion) c1.getSelector().getCriterion(source_criterion_type).ip());
-	IpPrefix source_prefix2 = ((IPCriterion) c2.getSelector().getCriterion(source_criterion_type).ip());
-
-	logger.info(source1.toString());
-	logger.info(source2.toString());
+	Criterion source_selector1 = c1.getSelector().getCriterion(source_criterion_type);
+	Criterion source_selector2 = c2.getSelector().getCriterion(source_criterion_type);
 
 	boolean source_overlap;
 	
-	if (source1 == null || source2 == null) {
+	if (source_selector1 == null || source_selector2 == null) {
 	    source_overlap = false;
 	}
 	else {
+	    IpPrefix source_prefix1 = ((IPCriterion) source_selector1).ip();
+	    IpPrefix source_prefix2 = ((IPCriterion) source_selector2).ip();
 	    source_overlap = source_prefix1.contains(source_prefix2) || source_prefix2.contains(source_prefix1);
 	}
 
-	IpPrefix dest_prefix1 = ((IPCriterion) c1.getSelector().getCriterion(source_criterion_type).ip());
-	IpPrefix dest_prefix2 = ((IPCriterion) c2.getSelector().getCriterion(source_criterion_type).ip());
+	Criterion dest_selector1 = c1.getSelector().getCriterion(source_criterion_type);
+	Criterion dest_selector2 = c2.getSelector().getCriterion(source_criterion_type);
 
 	boolean dest_overlap;
 	
-	if (dest1 == null || dest2 == null) {
+	if (dest_selector1 == null || dest_selector2 == null) {
 	    dest_overlap = false;
 	}
 	else {
+	    IpPrefix dest_prefix1 = ((IPCriterion) dest_selector1).ip();
+	    IpPrefix dest_prefix2 = ((IPCriterion) dest_selector2).ip();
 	    dest_overlap = dest_prefix1.contains(dest_prefix2) || dest_prefix2.contains(dest_prefix1);
 	}
         return source_overlap || dest_overlap;
@@ -77,21 +72,30 @@ public class TrafficClassDecomposer {
 	
 	logger.info("Calling 'decompose'");
 
-	// Question: Can we return any smaller subset? If A and B overlap can we JUST include A in the final set?
-
-	Set<TrafficClass> ret = new HashSet<TrafficClass>();
-	boolean overlap;
-	for (TrafficClass t : listOfTrafficClasses) {
-	    overlap = false;
-	    for (TrafficClass u : ret) {
-		if (hasOverlap(t,u)) {
-		    overlap = true;
+	Set<List<TrafficClass>> decomp_set = new HashSet<List<TrafficClass>>();
+	boolean found_list;
+	boolean overlap_found;
+	for (TrafficClass traffic_class : listOfTrafficClasses) {
+	    found_list = false;
+	    for (List<TrafficClass> curr_list : decomp_set) {
+		overlap_found = false;
+		for (TrafficClass curr_class : curr_list) {
+		    if (hasOverlap(traffic_class,curr_class)) {
+			overlap_found = true;
+			break;
+		    }
+		}
+		if (!overlap_found) {
+		    curr_list.add(traffic_class);
+		    found_list = true;
 		}
 	    }
-	    if (!overlap) {
-		ret.add(t);
+	    if (!found_list) {
+		List<TrafficClass> new_list = new ArrayList<TrafficClass>();
+		new_list.add(traffic_class);
+		decomp_set.add(new_list);
 	    }
 	}
-        return null;
+        return decomp_set;
     }
 }
