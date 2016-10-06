@@ -56,7 +56,8 @@ public class SolServiceImpl implements SolService {
     }
 
     @Override
-    public void registerApp(ApplicationId id, List<TrafficClass> trafficClasses, PathUpdateListener listener) {
+    public void registerApp(ApplicationId id, List<TrafficClass> trafficClasses, Optimization opt,
+                            PathUpdateListener listener) {
         tcMap.put(id, trafficClasses);
         listenerMap.put(id, new LinkedList<>());
         listenerMap.get(id).add(listener);
