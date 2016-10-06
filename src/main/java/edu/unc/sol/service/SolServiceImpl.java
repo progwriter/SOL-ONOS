@@ -10,14 +10,15 @@ import org.onosproject.net.topology.TopologyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.client.*;
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.client.Invocation;
+import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-
 
 @Component(immediate = true)
 @Service
@@ -121,6 +122,7 @@ public class SolServiceImpl implements SolService {
 //        if (response.getStatus() != 200) {
 //            logger.error(response.getStatusInfo().toString())
 //        }
+        log.info("Started");
     }
 
     @Deactivate
