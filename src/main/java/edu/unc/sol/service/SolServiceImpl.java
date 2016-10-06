@@ -1,24 +1,31 @@
 package edu.unc.sol.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import edu.unc.sol.app.Optimization;
 import edu.unc.sol.app.PathUpdateListener;
 import edu.unc.sol.app.TrafficClass;
 import edu.unc.sol.util.Config;
 import org.apache.felix.scr.annotations.*;
+import org.onlab.graph.Edge;
+import org.onlab.graph.Vertex;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.net.topology.TopologyGraph;
 import org.onosproject.net.topology.TopologyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.client.*;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+
+import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
 
 @Component(immediate = true)
 @Service
@@ -93,16 +100,13 @@ public class SolServiceImpl implements SolService {
     @Activate
     protected void activate() {
         running = true;
-
-        // Initialize the rest client
-        // Get the address from an environment variable
+        // Get the address of the SOL server from an environment variable
         String solServer = System.getenv(Config.SOL_ENV_VAR);
         if (solServer != null) {
-            // Upon activation, get the topology from the topology service and send it to SOL
-            // using rest API
+            // Build a proper url for the rest client
             StringBuilder builder = new StringBuilder();
-            String url = builder.append("http://").append(solServer)
-                    .append("/topology").toString();
+            String url = builder.append("http://").append(solServer).append("/api/v1/").toString();
+            // Send the topology to the SOL server
             sendTopology(url);
         } else {
             log.error("No SOL server configured");
@@ -113,17 +117,33 @@ public class SolServiceImpl implements SolService {
     }
 
     private void sendTopology(String url) {
-        WebTarget target = restClient.target(url);
+        // Get a target from the rest client
+        WebTarget target = restClient.target(url).path("/topology");
         // WARNING: we are running with the implicit assumption that that the topology does not change
+        // Extract the topology from the topology service
         TopologyGraph topo = topologyService.getGraph(topologyService.currentTopology());
-        Invocation.Builder builder = target.request(MediaType.APPLICATION_JSON_TYPE);
-        //TODO: figure out how to serialize TopologyGraph according to the schema
-        // and send it to the specified URL as a HTTP POST request.
-//        Response response = builder.post(Entity.entity(Topo), MediaType.APPLICATION_JSON_TYPE);
-//        if (response.getStatus() != 200) {
-//            logger.error(response.getStatusInfo().toString())
-//        }
-        log.info("Started");
+        // Now build our request
+        Invocation.Builder builder = target.request(APPLICATION_JSON_TYPE);
+        ObjectNode topoj = new ObjectNode(JsonNodeFactory.instance);
+        topoj.putObject("graph");
+        topoj.put("directed", true);
+        ArrayNode nodes = topoj.putObject("nodes").putArray("items");
+        ArrayNode links = topoj.putObject("links").putArray("items");
+        for (Vertex v : topo.getVertexes()) {
+            ObjectNode node = nodes.addObject();
+            node.put("id", v);
+            node.put("resources");
+            node.put("services", "switch");
+            // TODO: Put resources and services, if any
+        }
+        for (Edge e : topo.getEdges()) {
+            // TODO: put edges
+        }
+        // Send request to the specified URL as a HTTP POST request.
+        Response response = builder.post(Entity.json(topoj));
+        if (response.getStatus() != 200) {
+            log.error(response.getStatusInfo().toString());
+        }
     }
 
     @Deactivate
