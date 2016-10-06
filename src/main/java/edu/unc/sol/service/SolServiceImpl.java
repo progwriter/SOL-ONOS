@@ -3,7 +3,6 @@ package edu.unc.sol.service;
 import edu.unc.sol.app.PathUpdateListener;
 import edu.unc.sol.app.TrafficClass;
 import edu.unc.sol.util.Config;
-import edu.unc.sol.util.codecs.TopologyCodec;
 import org.apache.felix.scr.annotations.*;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.net.topology.TopologyGraph;
@@ -11,10 +10,7 @@ import org.onosproject.net.topology.TopologyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.client.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.HashMap;
@@ -103,7 +99,8 @@ public class SolServiceImpl implements SolService {
             // Upon activation, get the topology from the topology service and send it to SOL
             // using rest API
             StringBuilder builder = new StringBuilder();
-            String url = builder.append(solServer).append("/topology").toString();
+            String url = builder.append("http://").append(solServer)
+                    .append("/topology").toString();
             sendTopology(url);
         } else {
             log.error("No SOL server configured");
@@ -118,11 +115,11 @@ public class SolServiceImpl implements SolService {
         // WARNING: we are running with the implicit assumption that that the topology does not change
         TopologyGraph topo = topologyService.getGraph(topologyService.currentTopology());
         Invocation.Builder builder = target.request(MediaType.APPLICATION_JSON_TYPE);
-        Response response = builder.post();
-        if response.getStatus() != 200) {
-            logger.error(response.getStatusInfo().toString())
-        }
-//        target.request(MediaType.APPLICATION_JSON_TYPE).post(new TopologyCodec().encode(topo));
+        JSON
+        Response response = builder.post(Entity.entity(Topo), MediaType.APPLICATION_JSON_TYPE);
+//        if (response.getStatus() != 200) {
+//            logger.error(response.getStatusInfo().toString())
+//        }
     }
 
     @Deactivate
