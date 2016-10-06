@@ -115,8 +115,9 @@ public class SolServiceImpl implements SolService {
         // WARNING: we are running with the implicit assumption that that the topology does not change
         TopologyGraph topo = topologyService.getGraph(topologyService.currentTopology());
         Invocation.Builder builder = target.request(MediaType.APPLICATION_JSON_TYPE);
-        JSON
-        Response response = builder.post(Entity.entity(Topo), MediaType.APPLICATION_JSON_TYPE);
+        //TODO: figure out how to serialize TopologyGraph according to the schema
+        // and send it to the specified URL as a HTTP POST request.
+//        Response response = builder.post(Entity.entity(Topo), MediaType.APPLICATION_JSON_TYPE);
 //        if (response.getStatus() != 200) {
 //            logger.error(response.getStatusInfo().toString())
 //        }
