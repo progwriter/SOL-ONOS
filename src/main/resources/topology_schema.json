@@ -1,0 +1,75 @@
+{
+  "required": [
+    "directed",
+    "graph",
+    "links",
+    "multigraph",
+    "nodes"
+  ],
+  "type": "object",
+  "properties": {
+    "directed": {
+      "type": "boolean"
+    },
+    "graph": {
+      "required": [
+        "name"
+      ],
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "nodes": {
+      "items": {
+        "required": [
+          "id",
+          "resources",
+          "services"
+        ],
+        "type": "object",
+        "properties": {
+          "services": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "resources": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      "type": "array"
+    },
+    "links": {
+      "items": {
+        "required": [
+          "resources",
+          "source",
+          "target"
+        ],
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "integer"
+          },
+          "target": {
+            "type": "integer"
+          },
+          "resources": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      "type": "array"
+    },
+    "multigraph": {
+      "type": "boolean"
+    }
+  }
+}
