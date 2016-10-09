@@ -1,6 +1,5 @@
 package edu.unc.sol.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -18,7 +17,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.client.*;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -131,13 +129,15 @@ public class SolServiceImpl implements SolService {
         ArrayNode links = topoj.putObject("links").putArray("items");
         for (Vertex v : topo.getVertexes()) {
             ObjectNode node = nodes.addObject();
-            node.put("id", v);
-            node.put("resources");
+            //TODO: keep a vertex to int mapping and do something like this:
+//            node.put("id", vertexid);
             node.put("services", "switch");
-            // TODO: Put resources and services, if any
+            node.putObject("resources");
+            // TODO: Put resources of nodes, if any, like CPU (skip for now)
         }
         for (Edge e : topo.getEdges()) {
-            // TODO: put edges
+            // TODO: similarly put edges
+            // Every edge should have bandwidth ('bw') as resource
         }
         // Send request to the specified URL as a HTTP POST request.
         Response response = builder.post(Entity.json(topoj));
