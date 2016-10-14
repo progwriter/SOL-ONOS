@@ -140,10 +140,7 @@ public class SolServiceImpl implements SolService {
 	int vertex_index = 0;
 	int edge_index = 0;
         for (Vertex v : topology_vertexes) {
-            ObjectNode node = nodes.addObject();
-            //TODO: keep a vertex to int mapping and do something like this:
-//            node.put("id", vertexid);
-	    
+            ObjectNode node = nodes.addObject();	    
 	    //\/\\Chose to use an int array here because we are storing the vertex
 	    //\/\\number so I figured, we would only need to look up one way -sanjay
 	    vertex_mapping[vertex_index] = v; 
@@ -155,20 +152,17 @@ public class SolServiceImpl implements SolService {
 	    vertex_index += 1;
         }
         for (Edge e : topology_edges) {
-	    ObjectNode node = nodes.addObject();
-            // TODO: similarly put edges
-            // Every edge should have bandwidth ('bw') as resource
-
+	    ObjectNode link = links.addObject();
 	    //\/\\Not sure if we may need a mapping for edges also later,
 	    //\/\\Would this mapping better be indexed by two verticies
 	    //\/\\rather than a unique id number? -sanjay
 
 	    edge_mapping[edge_index] = e;
 
-	    node.put("id",Integer.toString(edge_index));
+	    link.put("id",Integer.toString(edge_index));
 	    //\/\\Need to check if 'resource' is the right field name
-	    node.put("resource","bw");
-	    //\/\\What else needs to be added for edges
+	    link.put("resource","bw");
+	    //\/\\What else needs to be added for edges?
 	    edge_index += 1;
         }
         // Send request to the specified URL as a HTTP POST request.
@@ -176,6 +170,9 @@ public class SolServiceImpl implements SolService {
         if (response.getStatus() != 200) {
             log.error(response.getStatusInfo().toString());
         }
+	else {
+	    log.info("Sucessfully POSTed the topology");
+	}
     }
 
     @Deactivate
