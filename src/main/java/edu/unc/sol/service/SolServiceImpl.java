@@ -176,7 +176,7 @@ public class SolServiceImpl implements SolService {
 	    Port src_port = deviceService.getPort(edge_link_src.deviceId(), edge_link_src.port());
 	    long src_bandwith_mbps = src_port.portSpeed();
 	    //TODO: make sure this doesn't int overflow, do we want to store in bytes?
-	    int src_bandwith_Bps = (int) (src_bandwith_mbps * 8388608.0); //8 * (2^20) bytes per Mb
+	    int src_bandwith_Bps = (int) (src_bandwith_mbps * 131072.0); //(2^20)/8 bytes per Mb
 	    bandwith.put("bw",Integer.toString(src_bandwith_Bps));
 	    //\/\\What else needs to be added for edges?
 	    edge_index += 1;
