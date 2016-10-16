@@ -14,7 +14,12 @@ import org.onosproject.core.ApplicationId;
 import org.onosproject.net.topology.TopologyGraph;
 import org.onosproject.net.topology.TopologyService;
 import org.onosproject.net.topology.TopologyEdge;
+import org.onosproject.net.topology.DefaultTopologyEdge;
 import org.onosproject.net.topology.TopologyVertex;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.Port;
+import org.onosproject.net.Link;
+import org.onosproject.net.ConnectPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +43,7 @@ public class SolServiceImpl implements SolService {
     protected Map<ApplicationId, List<PathUpdateListener>> listenerMap;
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected TopologyService topologyService;
+    protected DeviceService deviceService;
     private Boolean running;
     private Client restClient;
 
@@ -147,7 +153,7 @@ public class SolServiceImpl implements SolService {
 	    
 	    node.put("id",Integer.toString(vertex_index));
             node.put("services", "switch");
-            node.putObject("resources");
+            ArrayNode vertex_resources = node.putObject("resources").putArray("items");
             // TODO: Put resources of nodes, if any, like CPU (skip for now)
 	    vertex_index += 1;
         }
@@ -159,9 +165,19 @@ public class SolServiceImpl implements SolService {
 
 	    edge_mapping[edge_index] = e;
 
+	    //TODO: Every edge should have bandwith as resource
+
+	    //added that bandwith in Mbps
 	    link.put("id",Integer.toString(edge_index));
-	    //\/\\Need to check if 'resource' is the right field name
-	    link.put("resource","bw");
+	    ArrayNode edge_resources = link.putObject("resources").putArray("items");
+
+	    ConnectPoint edge_link_src = (((DefaultTopologyEdge)e).link()).src();
+	    ObjectNode bandwith = edge_resources.addObject();
+	    Port src_port = deviceService.getPort(edge_link_src.deviceId(), edge_link_src.port());
+	    long src_bandwith_mbps = src_port.portSpeed();
+	    //TODO: make sure this doesn't int overflow, do we want to store in bytes?
+	    int src_bandwith_Bps = (int) (src_bandwith_mbps * 8388608.0); //8 * (2^20) bytes per Mb
+	    bandwith.put("bw",Integer.toString(src_bandwith_Bps));
 	    //\/\\What else needs to be added for edges?
 	    edge_index += 1;
         }
