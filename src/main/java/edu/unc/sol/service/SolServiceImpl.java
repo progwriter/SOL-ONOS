@@ -13,6 +13,13 @@ import org.onlab.graph.Vertex;
 import org.onosproject.core.ApplicationId;
 import org.onosproject.net.topology.TopologyGraph;
 import org.onosproject.net.topology.TopologyService;
+import org.onosproject.net.topology.TopologyEdge;
+import org.onosproject.net.topology.DefaultTopologyEdge;
+import org.onosproject.net.topology.TopologyVertex;
+import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.Port;
+import org.onosproject.net.Link;
+import org.onosproject.net.ConnectPoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,6 +29,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
 
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
 
@@ -34,6 +43,7 @@ public class SolServiceImpl implements SolService {
     protected Map<ApplicationId, List<PathUpdateListener>> listenerMap;
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected TopologyService topologyService;
+    protected DeviceService deviceService;
     private Boolean running;
     private Client restClient;
 
@@ -127,23 +137,58 @@ public class SolServiceImpl implements SolService {
         topoj.put("directed", true);
         ArrayNode nodes = topoj.putObject("nodes").putArray("items");
         ArrayNode links = topoj.putObject("links").putArray("items");
-        for (Vertex v : topo.getVertexes()) {
-            ObjectNode node = nodes.addObject();
-            //TODO: keep a vertex to int mapping and do something like this:
-//            node.put("id", vertexid);
+	Set<TopologyVertex> topology_vertexes = topo.getVertexes();
+	Set<TopologyEdge> topology_edges = topo.getEdges();
+	int num_vertexes = topology_vertexes.size();
+	int num_edges = topology_edges.size();
+	Vertex[] vertex_mapping = new Vertex[num_vertexes];
+	Edge [] edge_mapping = new Edge[num_edges];
+	int vertex_index = 0;
+	int edge_index = 0;
+        for (Vertex v : topology_vertexes) {
+            ObjectNode node = nodes.addObject();	    
+	    //\/\\Chose to use an int array here because we are storing the vertex
+	    //\/\\number so I figured, we would only need to look up one way -sanjay
+	    vertex_mapping[vertex_index] = v; 
+	    
+	    node.put("id",Integer.toString(vertex_index));
             node.put("services", "switch");
-            node.putObject("resources");
+            ArrayNode vertex_resources = node.putObject("resources").putArray("items");
             // TODO: Put resources of nodes, if any, like CPU (skip for now)
+	    vertex_index += 1;
         }
-        for (Edge e : topo.getEdges()) {
-            // TODO: similarly put edges
-            // Every edge should have bandwidth ('bw') as resource
+        for (Edge e : topology_edges) {
+	    ObjectNode link = links.addObject();
+	    //\/\\Not sure if we may need a mapping for edges also later,
+	    //\/\\Would this mapping better be indexed by two verticies
+	    //\/\\rather than a unique id number? -sanjay
+
+	    edge_mapping[edge_index] = e;
+
+	    //TODO: Every edge should have bandwith as resource
+
+	    //added that bandwith in Mbps
+	    link.put("id",Integer.toString(edge_index));
+	    ArrayNode edge_resources = link.putObject("resources").putArray("items");
+
+	    ConnectPoint edge_link_src = (((DefaultTopologyEdge)e).link()).src();
+	    ObjectNode bandwith = edge_resources.addObject();
+	    Port src_port = deviceService.getPort(edge_link_src.deviceId(), edge_link_src.port());
+	    long src_bandwith_mbps = src_port.portSpeed();
+	    //TODO: make sure this doesn't int overflow, do we want to store in bytes?
+	    int src_bandwith_Bps = (int) (src_bandwith_mbps * 131072.0); //(2^20)/8 bytes per Mb
+	    bandwith.put("bw",Integer.toString(src_bandwith_Bps));
+	    //\/\\What else needs to be added for edges?
+	    edge_index += 1;
         }
         // Send request to the specified URL as a HTTP POST request.
         Response response = builder.post(Entity.json(topoj));
         if (response.getStatus() != 200) {
             log.error(response.getStatusInfo().toString());
         }
+	else {
+	    log.info("Sucessfully POSTed the topology");
+	}
     }
 
     @Deactivate
