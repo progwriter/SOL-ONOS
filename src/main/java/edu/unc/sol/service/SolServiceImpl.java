@@ -44,6 +44,8 @@ public class SolServiceImpl implements SolService {
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected TopologyService topologyService;
     protected DeviceService deviceService;
+    private Edge[][] edge_mapping;
+    private Vertex[] vertex_mapping;
     private Boolean running;
     private Client restClient;
 
@@ -124,6 +126,15 @@ public class SolServiceImpl implements SolService {
         log.info("Started");
     }
 
+    private int findVertexId(Vertex v) {
+	for (int i = 0; i < vertex_mapping.length; i++) {
+	    if (vertex_mapping[i].equals(v)) {
+		return i;
+	    }
+	}
+	return -1;
+    }
+    
     private void sendTopology(String url) {
         // Get a target from the rest client
         WebTarget target = restClient.target(url).path("/topology");
@@ -141,8 +152,8 @@ public class SolServiceImpl implements SolService {
 	Set<TopologyEdge> topology_edges = topo.getEdges();
 	int num_vertexes = topology_vertexes.size();
 	int num_edges = topology_edges.size();
-	Vertex[] vertex_mapping = new Vertex[num_vertexes];
-	Edge [] edge_mapping = new Edge[num_edges];
+	vertex_mapping = new Vertex[num_vertexes];
+	edge_mapping = new Edge[num_vertexes][num_vertexes];
 	int vertex_index = 0;
 	int edge_index = 0;
         for (Vertex v : topology_vertexes) {
@@ -163,8 +174,21 @@ public class SolServiceImpl implements SolService {
 	    //\/\\Would this mapping better be indexed by two verticies
 	    //\/\\rather than a unique id number? -sanjay
 
-	    edge_mapping[edge_index] = e;
+	    Vertex dst = e.dst();
+	    Vertex src = e.src();
 
+	    int dst_id = findVertexId(dst);
+	    int src_id = findVertexId(src);
+
+	    if (dst_id == -1 || src_id == -1) {
+		log.error("Could not find Vertex in Vertex Mapping");
+		continue;
+	    }
+
+	    //QUESTION: are there different properties for the
+	    //          edge, edge_mapping[a][b] and edge_mapping[b][a]?
+	    edge_mapping[dst_id][src_id] = e;
+	    
 	    //TODO: Every edge should have bandwith as resource
 
 	    //added that bandwith in Mbps
@@ -176,8 +200,8 @@ public class SolServiceImpl implements SolService {
 	    Port src_port = deviceService.getPort(edge_link_src.deviceId(), edge_link_src.port());
 	    long src_bandwith_mbps = src_port.portSpeed();
 	    //TODO: make sure this doesn't int overflow, do we want to store in bytes?
-	    int src_bandwith_Bps = (int) (src_bandwith_mbps * 131072.0); //(2^20)/8 bytes per Mb
-	    bandwith.put("bw",Integer.toString(src_bandwith_Bps));
+	    long src_bandwith_Bps = src_bandwith_mbps * 131072; //(2^20)/8 bytes per Mb
+	    bandwith.put("bw",Long.toString(src_bandwith_Bps));
 	    //\/\\What else needs to be added for edges?
 	    edge_index += 1;
         }
