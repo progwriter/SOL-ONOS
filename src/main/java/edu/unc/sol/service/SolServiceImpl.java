@@ -43,6 +43,7 @@ public class SolServiceImpl implements SolService {
     protected Map<ApplicationId, List<PathUpdateListener>> listenerMap;
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected TopologyService topologyService;
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected DeviceService deviceService;
     private Edge[][] edge_mapping;
     private Vertex[] vertex_mapping;
