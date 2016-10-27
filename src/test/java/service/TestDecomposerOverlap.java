@@ -46,8 +46,8 @@ public class TestDecomposerOverlap {
 
         TrafficSelector s1 = b1.build();
         TrafficSelector s2 = b2.build();
-        TrafficClass c1 = new TrafficClass(s1);
-        TrafficClass c2 = new TrafficClass(s2);
+        TrafficClass c1 = new TrafficClass(s1, 100);
+        TrafficClass c2 = new TrafficClass(s2, 0);
 
         Assert.assertEquals(TrafficClassDecomposer.hasOverlap(c1, c2), result);
     }
