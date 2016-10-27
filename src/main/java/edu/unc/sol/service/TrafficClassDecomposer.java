@@ -19,17 +19,9 @@ public class TrafficClassDecomposer {
 
     public static boolean hasOverlap(TrafficClass c1, TrafficClass c2) {
 
-        // TODO: write a function that determines if two classes' IP addresses and ports overlap
-        // Use the selector member of traffic class
-        // to determine what traffic the class is identifying.
-
-
         logger.info("Calling 'hasOverlap'");
 
         //QUESTION: is there only one of each criteria in a TrafficClass's selector's set of criterion?
-
-        Set<Criterion> criteria_set1 = c1.getSelector().criteria();
-        Set<Criterion> criteria_set2 = c2.getSelector().criteria();
 
         Criterion.Type source_criterion_type = Criterion.Type.IPV4_SRC;
         Criterion.Type dest_criterion_type = Criterion.Type.IPV4_DST;
@@ -63,9 +55,6 @@ public class TrafficClassDecomposer {
     }
 
     public static Set<List<TrafficClass>> decompose(List<TrafficClass> listOfTrafficClasses) {
-
-        // TODO: Write a functions that takes a list of traffic classes and if there is any overlap between
-        // them, returns "smaller" traffic classes that are non-overlapping.
 
         logger.info("Calling 'decompose'");
 
