@@ -46,8 +46,9 @@ public class TestDecomposerOverlap {
 
         TrafficSelector s1 = b1.build();
         TrafficSelector s2 = b2.build();
-        TrafficClass c1 = new TrafficClass(s1, 100);
-        TrafficClass c2 = new TrafficClass(s2, 0);
+        // For the purposes of the test, having null devices is OK.
+        TrafficClass c1 = new TrafficClass(s1, null, null, 100);
+        TrafficClass c2 = new TrafficClass(s2, null, null, 0);
 
         Assert.assertEquals(TrafficClassDecomposer.hasOverlap(c1, c2), result);
     }

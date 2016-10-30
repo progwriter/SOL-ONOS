@@ -1,10 +1,38 @@
 package edu.unc.sol.app;
 
+
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 /**
- * Created by victor on 9/29/16.
+ * Represents the objective function for an application (name + resource, if any)
  */
-public enum Objective {
-    OBJ_MIN_LATENCY,
-    OBJ_MIN_LOAD,
-    OBJ_MAX_FLOW
+public class Objective {
+    protected ObjectiveName name;
+    protected Resource res = null;
+
+    public Objective(ObjectiveName name, Resource resource) {
+        this.name = name;
+        this.res = resource;
+    }
+
+    public Objective(ObjectiveName name) {
+        this.name = name;
+    }
+
+    /**
+     * Create a JSON object representing this objective function
+     */
+    public ObjectNode toJSONnode() {
+        ObjectNode o = new ObjectNode(JsonNodeFactory.instance);
+        o.put("name", this.name.toString());
+        // Check that we have a non-null resource
+        if (this.res != null) {
+            // Put it in we have a real resource
+            o.put("resource", this.res.toString());
+        }
+        return o;
+    }
 }
+
+
