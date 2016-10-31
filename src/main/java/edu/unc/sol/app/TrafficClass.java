@@ -62,7 +62,7 @@ public class TrafficClass {
         //src_ip_prefix - src IP prefix that matches traffic in this class
         //dst_ip_prefix - dst IP prefix that matches traffic in this class
 
-        traffic_node.put("id", id);
+        traffic_node.put("tcid", id);
         traffic_node.put("src", solService.getIntegerID(this.src));
         traffic_node.put("dst", solService.getIntegerID(this.dst));
         traffic_node.put("vol_flows", this.estimated_volume);
