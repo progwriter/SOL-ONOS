@@ -25,12 +25,17 @@ import org.onosproject.net.DefaultLink;
 import org.onosproject.net.Link;
 import edu.unc.sol.service.TrafficClassDecomposer;
 import org.onlab.packet.IpPrefix;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.Ip4Address;
 import org.onosproject.net.flow.criteria.Criterion;
 import org.onosproject.net.flow.criteria.IPCriterion;
+import org.onosproject.net.flow.criteria.Criteria;
 import org.onosproject.net.DefaultPath;
-
+import org.onosproject.net.link.LinkService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.onosproject.ui.model.ServiceBundle;
+import org.onosproject.net.ConnectPoint;
 
 import javax.ws.rs.Path;
 import javax.ws.rs.client.*;
@@ -53,6 +58,8 @@ public class SolServiceImpl implements SolService {
     protected DeviceService deviceService;
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected CoreService core;
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkService linkService;
     private Edge[][] edge_mapping;
     private Vertex[] vertex_mapping;
     private Boolean running;
@@ -315,12 +322,12 @@ public class SolServiceImpl implements SolService {
         assert paths.isArray();
 
 	//FRACTION CALCULATION PROCESS:
-	//1. create arr of [paths.size()] where each is array list for prefix, fraction
-	//2. calculate normalized load for each leaf (create path id, curr_load)
-	//3. sort by curr_load
-	//4. find highest power of 2 for each curr_load, add prefix rule with its fraction to index in arr
-	//5. subtract this highest power of 2 for curr_load
-	//6. keep repeating until all curr_load = 0;
+	//1. calculate normalized load for each leaf (create path id, curr_load)
+	//2. sort by curr_load
+	//3. find highest power of 2 for each curr_load
+	//   add prefix rule with its fraction to index in arr
+	//4. subtract this highest power of 2 for curr_load
+	//5. keep repeating until all curr_load = 0;
 
 	//Calculate max #of decimal places in any fraction
 	int max_places = 0;
@@ -342,11 +349,13 @@ public class SolServiceImpl implements SolService {
 	}
 
 	//Calculate a new_total which is the next highest power of 2
-	long power = Math.round(Math.log(total)/Math.log(2)); //calculate next highest power of 2
+	long power = Math.round(Math.log(total)/Math.log(2)); 
 	double fraction_weight = Math.pow(2.0,power) / (total*1.0);
-	long new_total = Math.round(Math.pow(2.0,power)); //should be a power of 2
-	ArrayList<ArrayList<String>> prefixes = new ArrayList<ArrayList<String>>();;
-	ArrayList<ArrayList<Double>> fractions = new ArrayList<ArrayList<Double>>();
+	long new_total = Math.round(Math.pow(2.0,power)); 
+	ArrayList<ArrayList<String>> prefixes =
+	    new ArrayList<ArrayList<String>>();;
+	ArrayList<ArrayList<Double>> fractions =
+	    new ArrayList<ArrayList<Double>>();
 
 	for (int i = 0; i < paths.size(); i++) {
 	    prefixes.add(new ArrayList<String>());
@@ -373,13 +382,10 @@ public class SolServiceImpl implements SolService {
 	    }
 	    weight_index += 1;
 	}
-
-	//should assert THAT sum of all normalized weights is power of 2
-
+	
 	boolean has_non_zero = true;
 
-	//keep creating prefix rules, along with fractions, starting from the
-	//largest load to the smallest each time
+	//keep creating prefix rules, along with fractions for largest load
 	long cumulative_load = 0;
 	while (has_non_zero) {
 	    long[][] sorted_weights = sort_weights(normalized_weights);
@@ -391,24 +397,26 @@ public class SolServiceImpl implements SolService {
 		continue;
 	    }
 		
-	    long highest_power_two = (long) (Math.log(curr_load) / Math.log(2.0));
-	    //--make sure converting to int doesnt cause an issue
+	    long highest_power_two = (long)
+		(Math.log(curr_load) / Math.log(2.0));
+
 	    String binary = Integer.toBinaryString((int)cumulative_load);
 	    
 	    //take the rightmost 'power' bits
 	    String proper_binary = binary.substring(binary.length()-(int)power, binary.length());
 		
-	    //take the first ('power' - 'highest_power_two') bits of this string as the bits to add to the prefix
-	    String prefix_add_bits = proper_binary.substring(0, (int)(power-highest_power_two));
-	    Double prefix_fraction = new Double(Math.pow(2.0, highest_power_two) / (new_total * 1.0));
+	    //add the first ('power' - 'highest_power_two') bits to the prefix
+	    String prefix_add_bits =
+		proper_binary.substring(0, (int)(power-highest_power_two));
+	    Double prefix_fraction =
+		new Double(Math.pow(2.0, highest_power_two)/(new_total * 1.0));
 		
 	    prefixes.get((int)sorted_weights[i][0]).add(prefix_add_bits);
 	    fractions.get((int)sorted_weights[i][0]).add(prefix_fraction);
 		
 	    normalized_weights[i][1] -= (long) Math.pow(2.0, highest_power_two);
 	    cumulative_load += (int) Math.pow(2.0, highest_power_two);		
-	}    
-	
+	}
 	
         ArrayList<PathIntent> result = new ArrayList<PathIntent>();
  		
@@ -437,13 +445,23 @@ public class SolServiceImpl implements SolService {
 		    int curr_id = node.get("id").asInt();
 		    
 		    DeviceId prev_dev = linkMap.get(prev_id);
-		    DeviceId curr_dev = linkMap.get(curr_id);
-		    
-		    //TODO need to get ConnectPoint from DeviceId
+		    DeviceId next_dev = linkMap.get(curr_id);
 		    
 		    ConnectPoint src_connect_point = null;
 		    ConnectPoint dst_connect_point = null;
 
+		    Set<Link> src_egress =
+			linkService.getDeviceEgressLinks(prev_dev);
+
+		    for (Link curr_link : src_egress) {
+			ConnectPoint curr_connect_point = curr_link.dst();
+			DeviceId curr_dev = curr_connect_point.deviceId();
+			if (curr_dev.equals(next_dev)) {
+			    dst_connect_point = curr_connect_point;
+			    src_connect_point = curr_link.src();
+			}
+		    }
+		    		    
 		    link_builder.src(src_connect_point);
 		    link_builder.dst(dst_connect_point);
 		    DefaultLink link = link_builder.build();
@@ -461,7 +479,9 @@ public class SolServiceImpl implements SolService {
 
 	    //Loop through each wildcard rule we have for this path
 	    for (int i = 0; i < prefixes.get(path_index).size(); i++) {
-		    TrafficSelector.Builder ts_builder = DefaultTrafficSelector.builder();
+		    TrafficSelector.Builder ts_builder =
+			DefaultTrafficSelector.builder();
+
 		    for (Criterion curr_criteria : original_criteria) {
 			if (curr_criteria.type() != Criterion.Type.IPV4_SRC) {
 			    ts_builder.add(curr_criteria);
@@ -469,15 +489,36 @@ public class SolServiceImpl implements SolService {
 			else {
 			    String extra_bits = prefixes.get(path_index).get(i);
 			    IpPrefix curr_prefix = ((IPCriterion) original_selector.getCriterion(Criterion.Type.IPV4_SRC)).ip();
-			    //TODO need to add these extra bits to the curr_prefix and adjust the length and create a new IPCriterion
-			    ts_builder.add(curr_criteria);
+			    int curr_prefix_len = curr_prefix.prefixLength();
+			    int shift = 31 - curr_prefix_len;
+			    Ip4Address curr_ip =
+				curr_prefix.address().getIp4Address();
+			    int curr_ip_int = curr_ip.toInt();
+			    int curr_mask = 0;
+			    for (int ind = 0; ind < extra_bits.length(); ind++){
+				String curr_char =
+				    extra_bits.substring(ind,ind+1);
+				int curr_bit =
+				    Integer.valueOf(curr_char).intValue();
+				curr_mask =
+				    curr_mask | (curr_bit << (shift-ind));
+			    }
+			    int new_ip_int = curr_ip_int | curr_mask;
+			    IpAddress new_ip = IpAddress.valueOf(new_ip_int);
+			    int new_prefix_len =
+				curr_prefix_len + extra_bits.length();
+			    IpPrefix new_prefix =
+				IpPrefix.valueOf(new_ip, new_prefix_len);
+			    ts_builder.add(Criteria.matchIPSrc(new_prefix));
 			}   
 		    }
 		    
 		    TrafficSelector new_selector = ts_builder.build();
 		    
 		    PathIntent.Builder intent_builder = PathIntent.builder();
-		    DefaultPath curr_path = new DefaultPath(null, link_list, fractions.get(path_index).get(i), null);
+		    DefaultPath curr_path =
+			new DefaultPath(null, link_list,
+					fractions.get(path_index).get(i), null);
 		    intent_builder.path(curr_path);
 		    intent_builder.selector(new_selector);
 
