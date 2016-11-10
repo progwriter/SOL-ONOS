@@ -19,8 +19,23 @@ import org.onosproject.net.Port;
 import org.onosproject.net.device.DeviceService;
 import org.onosproject.net.intent.PathIntent;
 import org.onosproject.net.topology.*;
+import org.onosproject.net.flow.TrafficSelector;
+import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.DefaultLink;
+import org.onosproject.net.Link;
+import edu.unc.sol.service.TrafficClassDecomposer;
+import org.onlab.packet.IpPrefix;
+import org.onlab.packet.IpAddress;
+import org.onlab.packet.Ip4Address;
+import org.onosproject.net.flow.criteria.Criterion;
+import org.onosproject.net.flow.criteria.IPCriterion;
+import org.onosproject.net.flow.criteria.Criteria;
+import org.onosproject.net.DefaultPath;
+import org.onosproject.net.link.LinkService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.onosproject.ui.model.ServiceBundle;
+import org.onosproject.net.ConnectPoint;
 
 import javax.ws.rs.Path;
 import javax.ws.rs.client.*;
@@ -43,11 +58,14 @@ public class SolServiceImpl implements SolService {
     protected DeviceService deviceService;
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected CoreService core;
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected LinkService linkService;
     private Edge[][] edge_mapping;
     private Vertex[] vertex_mapping;
     private Boolean running;
     private Client restClient;
     private HashMap<DeviceId, Integer> deviceMap;
+    private HashMap<Integer, DeviceId> linkMap;
     private HashMap<ApplicationId, Optimization> optimizations;
     private String remoteURL;
     private List<TrafficClass> allTrafficClasses;
@@ -173,6 +191,7 @@ public class SolServiceImpl implements SolService {
         for (Vertex v : topology_vertexes) {
             DeviceId dev = ((DefaultTopologyVertex) v).deviceId();
             deviceMap.put(dev, vertex_index);
+	    linkMap.put(vertex_index, dev);
             ObjectNode node = nodes.addObject();
             node.put("id", getIntegerID(dev));
             // Devices in ONOS are by default switches (hosts are a separate category),
@@ -274,28 +293,238 @@ public class SolServiceImpl implements SolService {
         }
     }
 
+    //function to sort our custom arr we use in computeIntents
+    private long[][] sort_weights(long[][] arr) {
+	//copy argument
+	long[][] new_arr = new long[arr.length][2];
+	for (int i = 0; i < arr.length; i++) {
+	    new_arr[i][0] = arr[i][0];
+	    new_arr[i][1] = arr[i][1];
+	}
+
+	//in place selection sort
+	for (int j = 0; j < arr.length; j++) {
+	    long curr_max = -1;
+	    int max_i = -1;
+	    for (int i = j; i < arr.length; i++) {
+		if (new_arr[i][1] > curr_max) {
+		    curr_max = new_arr[i][1];
+		    max_i = i;
+		}
+	    }
+	    new_arr[j][0] = new_arr[max_i][0];
+	    new_arr[j][1] = new_arr[max_i][1];
+	}
+	return new_arr;
+    }
+    
     private Collection<PathIntent> computeIntents(JsonNode paths) {
         assert paths.isArray();
-        ArrayList<PathIntent> result = new ArrayList<>();
-        for (final JsonNode pathobj: paths) {
-            // Extract the traffic class
-            int tcid = pathobj.get("tcid").asInt();
-            TrafficClass tc = allTrafficClasses.get(tcid);
-            // Get the path nodes
-            JsonNode pathnodes = pathobj.get("nodes");
-            // Get the fraction of flows on this path
-            double fraction = pathobj.get("fraction").asDouble();
 
-            //TODO: construct path intents @sanjay
-            // 1. Get the traffic selector from traffic class
-            // 2. Figure out how to "split" the traffic selector if the number of paths is >1:
-            // If the fraction is .7 (70%) for a path, how do we partition the IP space to route 70%
-            // along that path?
-            // One approach is https://www.usenix.org/event/hotice11/tech/full_papers/Wang_Richard.pdf
-            // Around section 2, but maybe there are alternative ways?
+	//FRACTION CALCULATION PROCESS:
+	//1. calculate normalized load for each leaf (create path id, curr_load)
+	//2. sort by curr_load
+	//3. find highest power of 2 for each curr_load
+	//   add prefix rule with its fraction to index in arr
+	//4. subtract this highest power of 2 for curr_load
+	//5. keep repeating until all curr_load = 0;
 
-            // 3. Convert path nodes to a series of links (because that's how intents are constructed in ONOS)
-            // 4. Create the intent(s), with the new traffic selectors and add it to the result list.
+	//Calculate max #of decimal places in any fraction
+	int max_places = 0;
+	for (final JsonNode pathobj:paths) {
+	    double fraction = pathobj.get("fraction").asDouble();
+	    String fraction_string = Double.toString(fraction);
+	    int integer_places = fraction_string.indexOf('.');
+	    int decimal_places = fraction_string.length() - integer_places - 1;
+	    max_places = Integer.max(max_places, decimal_places);
+	}
+
+	//Calculate the total weight, where all weights are > 1 now
+	int total = 0;
+	double weight = Math.pow(10.0, max_places);
+	for (final JsonNode pathobj:paths) {
+	    double fraction = pathobj.get("fraction").asDouble();
+	    double weighted = weight * fraction;
+	    total += (int) weighted;
+	}
+
+	//Calculate a new_total which is the next highest power of 2
+	long power = Math.round(Math.log(total)/Math.log(2)); 
+	double fraction_weight = Math.pow(2.0,power) / (total*1.0);
+	long new_total = Math.round(Math.pow(2.0,power)); 
+	ArrayList<ArrayList<String>> prefixes =
+	    new ArrayList<ArrayList<String>>();;
+	ArrayList<ArrayList<Double>> fractions =
+	    new ArrayList<ArrayList<Double>>();
+
+	for (int i = 0; i < paths.size(); i++) {
+	    prefixes.add(new ArrayList<String>());
+	    fractions.add(new ArrayList<Double>());
+	}
+
+	//Normalize the Weights for each of the paths with this new pow of 2
+	//index 0 is the path the weight is for when we sort the array
+	//index 1 is the curr_load for the path
+	long[][] normalized_weights = new long[paths.size()][2];
+	long curr_new_total = new_total;
+	int weight_index = 0;
+	for (final JsonNode pathobj:paths) {
+	    double fraction = pathobj.get("fraction").asDouble();
+	    long weighted = (long) (weight*fraction*fraction_weight);
+	    if (weight_index == (paths.size()-1)) {
+		normalized_weights[weight_index][0] = weight_index;
+		normalized_weights[weight_index][1] = curr_new_total;
+	    }
+	    else {
+		normalized_weights[weight_index][0] = weight_index;
+		normalized_weights[weight_index][1] = weighted;
+		curr_new_total -= weighted;
+	    }
+	    weight_index += 1;
+	}
+	
+	boolean has_non_zero = true;
+
+	//keep creating prefix rules, along with fractions for largest load
+	long cumulative_load = 0;
+	while (has_non_zero) {
+	    long[][] sorted_weights = sort_weights(normalized_weights);
+	    int i = 0; //always create a rule for the max load after sorting
+	    long curr_load = sorted_weights[i][1];
+	    
+	    if (curr_load == 0) {
+		has_non_zero = false;
+		continue;
+	    }
+		
+	    long highest_power_two = (long)
+		(Math.log(curr_load) / Math.log(2.0));
+
+	    String binary = Integer.toBinaryString((int)cumulative_load);
+	    
+	    //take the rightmost 'power' bits
+	    String proper_binary = binary.substring(binary.length()-(int)power, binary.length());
+		
+	    //add the first ('power' - 'highest_power_two') bits to the prefix
+	    String prefix_add_bits =
+		proper_binary.substring(0, (int)(power-highest_power_two));
+	    Double prefix_fraction =
+		new Double(Math.pow(2.0, highest_power_two)/(new_total * 1.0));
+		
+	    prefixes.get((int)sorted_weights[i][0]).add(prefix_add_bits);
+	    fractions.get((int)sorted_weights[i][0]).add(prefix_fraction);
+		
+	    normalized_weights[i][1] -= (long) Math.pow(2.0, highest_power_two);
+	    cumulative_load += (int) Math.pow(2.0, highest_power_two);		
+	}
+	
+        ArrayList<PathIntent> result = new ArrayList<PathIntent>();
+ 		
+	int path_index = -1;
+	for (final JsonNode pathobj: paths) {
+	    path_index++;
+	    // Extract the traffic class
+	    int tcid = pathobj.get("tcid").asInt();
+	    TrafficClass tc = allTrafficClasses.get(tcid);
+	    // Get the path nodes
+	    
+	    JsonNode pathnodes = pathobj.get("nodes");
+	    
+	    List<Link> link_list = new ArrayList<Link>();
+	    
+	    JsonNode prev_node = null;
+	    for (JsonNode node:pathnodes) {
+		if (prev_node == null) {
+		    prev_node = node;
+		    continue;
+		}
+		else {
+		    DefaultLink.Builder link_builder = DefaultLink.builder();
+		    
+		    int prev_id = prev_node.get("id").asInt();
+		    int curr_id = node.get("id").asInt();
+		    
+		    DeviceId prev_dev = linkMap.get(prev_id);
+		    DeviceId next_dev = linkMap.get(curr_id);
+		    
+		    ConnectPoint src_connect_point = null;
+		    ConnectPoint dst_connect_point = null;
+
+		    Set<Link> src_egress =
+			linkService.getDeviceEgressLinks(prev_dev);
+
+		    for (Link curr_link : src_egress) {
+			ConnectPoint curr_connect_point = curr_link.dst();
+			DeviceId curr_dev = curr_connect_point.deviceId();
+			if (curr_dev.equals(next_dev)) {
+			    dst_connect_point = curr_connect_point;
+			    src_connect_point = curr_link.src();
+			}
+		    }
+		    		    
+		    link_builder.src(src_connect_point);
+		    link_builder.dst(dst_connect_point);
+		    DefaultLink link = link_builder.build();
+		    link_list.add((Link)link);
+		    prev_node = node;
+		}
+	    }
+	    
+	    
+	    //Get the fraction of flows on this path
+	    double fraction = pathobj.get("fraction").asDouble();
+	    
+	    TrafficSelector original_selector = tc.getSelector();
+	    Set<Criterion> original_criteria = original_selector.criteria();
+
+	    //Loop through each wildcard rule we have for this path
+	    for (int i = 0; i < prefixes.get(path_index).size(); i++) {
+		    TrafficSelector.Builder ts_builder =
+			DefaultTrafficSelector.builder();
+
+		    for (Criterion curr_criteria : original_criteria) {
+			if (curr_criteria.type() != Criterion.Type.IPV4_SRC) {
+			    ts_builder.add(curr_criteria);
+			}
+			else {
+			    String extra_bits = prefixes.get(path_index).get(i);
+			    IpPrefix curr_prefix = ((IPCriterion) original_selector.getCriterion(Criterion.Type.IPV4_SRC)).ip();
+			    int curr_prefix_len = curr_prefix.prefixLength();
+			    int shift = 31 - curr_prefix_len;
+			    Ip4Address curr_ip =
+				curr_prefix.address().getIp4Address();
+			    int curr_ip_int = curr_ip.toInt();
+			    int curr_mask = 0;
+			    for (int ind = 0; ind < extra_bits.length(); ind++){
+				String curr_char =
+				    extra_bits.substring(ind,ind+1);
+				int curr_bit =
+				    Integer.valueOf(curr_char).intValue();
+				curr_mask =
+				    curr_mask | (curr_bit << (shift-ind));
+			    }
+			    int new_ip_int = curr_ip_int | curr_mask;
+			    IpAddress new_ip = IpAddress.valueOf(new_ip_int);
+			    int new_prefix_len =
+				curr_prefix_len + extra_bits.length();
+			    IpPrefix new_prefix =
+				IpPrefix.valueOf(new_ip, new_prefix_len);
+			    ts_builder.add(Criteria.matchIPSrc(new_prefix));
+			}   
+		    }
+		    
+		    TrafficSelector new_selector = ts_builder.build();
+		    
+		    PathIntent.Builder intent_builder = PathIntent.builder();
+		    DefaultPath curr_path =
+			new DefaultPath(null, link_list,
+					fractions.get(path_index).get(i), null);
+		    intent_builder.path(curr_path);
+		    intent_builder.selector(new_selector);
+
+		    PathIntent path_intent = intent_builder.build();
+		    result.add(path_intent);
+		}
         }
         return result;
     }
@@ -311,3 +540,4 @@ public class SolServiceImpl implements SolService {
         return deviceMap.get(id).intValue();
     }
 }
+    
