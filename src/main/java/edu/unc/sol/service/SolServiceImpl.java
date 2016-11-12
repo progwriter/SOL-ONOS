@@ -349,7 +349,13 @@ public class SolServiceImpl implements SolService {
 	}
 
 	//Calculate a new_total which is the next highest power of 2
-	long power = Math.round(Math.log(total)/Math.log(2)); 
+	long power = 0;
+	if (Long.bitCount(total) == 1) {
+	    power = (long) (Math.log(total) / Math.log(2));
+	}
+	else {
+	    power = ((long) (Math.log(total) / Math.log(2))) + 1;
+	}
 	double fraction_weight = Math.pow(2.0,power) / (total*1.0);
 	long new_total = Math.round(Math.pow(2.0,power)); 
 	ArrayList<ArrayList<String>> prefixes =
@@ -403,7 +409,16 @@ public class SolServiceImpl implements SolService {
 	    String binary = Integer.toBinaryString((int)cumulative_load);
 	    
 	    //take the rightmost 'power' bits
-	    String proper_binary = binary.substring(binary.length()-(int)power, binary.length());
+	    String proper_binary = "";
+	    if (power > binary.length()) {
+		for (int k = 0; k < power-binary.length(); k++) {
+		    proper_binary += "0";
+		}
+		proper_binary += binary;
+	    }
+	    else {
+		proper_binary = binary.substring(binary.length()-(int)power, binary.length());
+	    }
 		
 	    //add the first ('power' - 'highest_power_two') bits to the prefix
 	    String prefix_add_bits =
@@ -414,7 +429,7 @@ public class SolServiceImpl implements SolService {
 	    prefixes.get((int)sorted_weights[i][0]).add(prefix_add_bits);
 	    fractions.get((int)sorted_weights[i][0]).add(prefix_fraction);
 		
-	    normalized_weights[i][1] -= (long) Math.pow(2.0, highest_power_two);
+	    normalized_weights[(int)(sorted_weights[i][0])][1] -= (long) Math.pow(2.0, highest_power_two);
 	    cumulative_load += (int) Math.pow(2.0, highest_power_two);		
 	}
 	
