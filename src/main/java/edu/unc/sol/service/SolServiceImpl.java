@@ -329,44 +329,13 @@ public class SolServiceImpl implements SolService {
 	//4. subtract this highest power of 2 for curr_load
 	//5. keep repeating until all curr_load = 0;
 
-	//Calculate max #of decimal places in any fraction
-	int max_places = 0;
-	for (final JsonNode pathobj:paths) {
-	    double fraction = pathobj.get("fraction").asDouble();
-	    String fraction_string = Double.toString(fraction);
-	    int integer_places = fraction_string.indexOf('.');
-	    int decimal_places = fraction_string.length() - integer_places - 1;
-	    max_places = Integer.max(max_places, decimal_places);
-	}
-
-	//Calculate the total weight, where all weights are > 1 now
-	int total = 0;
-	double weight = Math.pow(10.0, max_places);
-	for (final JsonNode pathobj:paths) {
-	    double fraction = pathobj.get("fraction").asDouble();
-	    double weighted = weight * fraction;
-	    total += (int) weighted;
-	}
-
-	//Calculate a new_total which is the next highest power of 2
-	long power = 0;
-	if (Long.bitCount(total) == 1) {
-	    power = (long) (Math.log(total) / Math.log(2));
-	}
-	else {
-	    power = ((long) (Math.log(total) / Math.log(2))) + 1;
-	}
-	double fraction_weight = Math.pow(2.0,power) / (total*1.0);
-	long new_total = Math.round(Math.pow(2.0,power)); 
-	ArrayList<ArrayList<String>> prefixes =
-	    new ArrayList<ArrayList<String>>();;
-	ArrayList<ArrayList<Double>> fractions =
-	    new ArrayList<ArrayList<Double>>();
-
-	for (int i = 0; i < paths.size(); i++) {
-	    prefixes.add(new ArrayList<String>());
-	    fractions.add(new ArrayList<Double>());
-	}
+	IpPrefix prefix = null;
+	
+	int precision = 32 - prefix.prefixLength();
+	long power = precision;
+	
+	double fraction_weight = Math.pow(2.0,precision);
+	long new_total = (long) fraction_weight; 
 
 	//Normalize the Weights for each of the paths with this new pow of 2
 	//index 0 is the path the weight is for when we sort the array
@@ -376,7 +345,7 @@ public class SolServiceImpl implements SolService {
 	int weight_index = 0;
 	for (final JsonNode pathobj:paths) {
 	    double fraction = pathobj.get("fraction").asDouble();
-	    long weighted = (long) (weight*fraction*fraction_weight);
+	    long weighted = (long) (fraction*fraction_weight);
 	    if (weight_index == (paths.size()-1)) {
 		normalized_weights[weight_index][0] = weight_index;
 		normalized_weights[weight_index][1] = curr_new_total;
@@ -388,6 +357,17 @@ public class SolServiceImpl implements SolService {
 	    }
 	    weight_index += 1;
 	}
+
+	ArrayList<ArrayList<String>> prefixes =
+	    new ArrayList<ArrayList<String>>();;
+	ArrayList<ArrayList<Double>> fractions =
+	    new ArrayList<ArrayList<Double>>();
+
+	for (int i = 0; i < paths.size(); i++) {
+	    prefixes.add(new ArrayList<String>());
+	    fractions.add(new ArrayList<Double>());
+	}
+
 	
 	boolean has_non_zero = true;
 
@@ -432,6 +412,17 @@ public class SolServiceImpl implements SolService {
 	    normalized_weights[(int)(sorted_weights[i][0])][1] -= (long) Math.pow(2.0, highest_power_two);
 	    cumulative_load += (int) Math.pow(2.0, highest_power_two);		
 	}
+
+	//@victor_prefix- normally at this point I've computed all the
+	// prefixes and fractions for each pathobj in the list
+	// and then added the pathobj along with each respective
+	// fraction/new IP prefix rule in its traffic selector
+	// However, I think this is one level too high, I need
+	// to do this fraction algorithm on each traffic class
+	// and then add all the intents into one big list. It
+	// wouldn't be too hard to do this for each pathobj,
+	// but if you'd still like to make the arbitration
+	// one level higher that works too
 	
         ArrayList<PathIntent> result = new ArrayList<PathIntent>();
  		
