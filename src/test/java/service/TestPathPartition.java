@@ -78,7 +78,7 @@ public class TestPathPartition {
     
     @Test
     public void test() throws InterruptedException{
-
+	
 	System.out.println("Starting Test " + test_num + "...");
 	
 	int length = f.length;
@@ -94,45 +94,12 @@ public class TestPathPartition {
 	//   add prefix rule with its fraction to index in arr
 	//4. subtract this highest power of 2 for curr_load
 	//5. keep repeating until all curr_load = 0;
-
-	//Calculate max #of decimal places in any fraction
-	int max_places = 0;
-	for (int i = 0; i < length; i++) {
-	    double fraction = f[i];
-	    String fraction_string = Double.toString(fraction);
-	    int integer_places = fraction_string.indexOf('.');
-	    int decimal_places = fraction_string.length() - integer_places - 1;
-	    max_places = Integer.max(max_places, decimal_places);
-	}
-
-	//Calculate the total weight, where all weights are > 1 now
-	int total = 0;
-	double weight = Math.pow(10.0, max_places);
-	for (int i = 0; i < length; i++) {
-	    double fraction = f[i];
-	    double weighted = weight * fraction;
-	    total += (int) weighted;
-	}
-
-	//Calculate a new_total which is the next highest power of 2
-	long power = 0;
-	if (Long.bitCount(total) == 1) {
-	    power = (long) (Math.log(total) / Math.log(2));
-	}
-	else {
-	    power = ((long) (Math.log(total) / Math.log(2))) + 1;
-	}
-	double fraction_weight = Math.pow(2.0,power) / (total*1.0);
-	long new_total = Math.round(Math.pow(2.0,power)); 
-	ArrayList<ArrayList<String>> prefixes =
-	    new ArrayList<ArrayList<String>>();;
-	ArrayList<ArrayList<Double>> fractions =
-	    new ArrayList<ArrayList<Double>>();
-
-	for (int i = 0; i < length; i++) {
-	    prefixes.add(new ArrayList<String>());
-	    fractions.add(new ArrayList<Double>());
-	}
+	
+	//new method
+	int precision = 32 - prefix.prefixLength(); //depth of the tree
+	long power = precision;
+	double fraction_weight = Math.pow(2.0, precision);
+	long new_total = (long) fraction_weight;
 
 	//Normalize the Weights for each of the paths with this new pow of 2
 	//index 0 is the path the weight is for when we sort the array
@@ -142,7 +109,9 @@ public class TestPathPartition {
 	int weight_index = 0;
 	for (int i = 0; i < length; i++) {
 	    double fraction = f[i];
-	    long weighted = (long) (weight*fraction*fraction_weight);
+
+	    //TODO: rounding here may be the right choice rather than rounddown
+	    long weighted = (long) (fraction*fraction_weight);
 	    if (weight_index == (length-1)) {
 		normalized_weights[weight_index][0] = weight_index;
 		normalized_weights[weight_index][1] = curr_new_total;
@@ -155,6 +124,17 @@ public class TestPathPartition {
 	    weight_index += 1;
 	}
 
+	ArrayList<ArrayList<String>> prefixes =
+	    new ArrayList<ArrayList<String>>();;
+	ArrayList<ArrayList<Double>> fractions =
+	    new ArrayList<ArrayList<Double>>();
+	
+	for (int i = 0; i < length; i++) {
+	    prefixes.add(new ArrayList<String>());
+	    fractions.add(new ArrayList<Double>());
+	}
+
+	
 	boolean has_non_zero = true;
 
 	//keep creating prefix rules, along with fractions for largest load
