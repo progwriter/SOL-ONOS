@@ -1,8 +1,6 @@
 package edu.unc.sol.app;
 
 
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * Represents the objective function for an application (name + resource, if any)
@@ -23,16 +21,16 @@ public class Objective {
     /**
      * Create a JSON object representing this objective function
      */
-    public ObjectNode toJSONnode() {
-        ObjectNode o = new ObjectNode(JsonNodeFactory.instance);
-        o.put("name", this.name.toString());
-        // Check that we have a non-null resource
-        if (this.res != null) {
-            // Put it in we have a real resource
-            o.put("resource", this.res.toString());
-        }
-        return o;
-    }
+//    public ObjectNode toJSONnode() {
+//        ObjectNode o = new ObjectNode(JsonNodeFactory.instance);
+//        o.put("name", this.name.toString());
+//        // Check that we have a non-null resource
+//        if (this.res != null) {
+//            // Put it in we have a real resource
+//            o.put("resource", this.res.toString());
+//        }
+//        return o;
+//    }
 }
 
 

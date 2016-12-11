@@ -1,0 +1,11 @@
+<features xmlns="http://karaf.apache.org/xmlns/features/v1.3.0" name="sol">
+    <feature name="org.apache.httpcomponent">
+        <bundle>mvn:org.apache.httpcomponent/httpclient</bundle>
+        <bundle>mvn:org.apache.httpcomponent/httpasyncclient</bundle>
+        <bundle>mvn:org.apache.httpcomponent/httpmime</bundle>
+    </feature>
+    <feature name="com.mashape.unirest">
+        <bundle>wrap:mvn:com.mashape.unirest</bundle>
+        <bundle>mvn:org.json/json</bundle>
+    </feature>
+</features>

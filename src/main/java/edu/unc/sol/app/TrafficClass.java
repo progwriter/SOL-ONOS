@@ -1,7 +1,5 @@
 package edu.unc.sol.app;
 
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import edu.unc.sol.service.SolService;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
@@ -52,37 +50,37 @@ public class TrafficClass {
      * @param id: Unique, sequential, integer ID assigned to the traffic class by the SOL Service
      * @return
      */
-    public ObjectNode toJSONnode(int id) {
-        ObjectNode traffic_node = new ObjectNode(JsonNodeFactory.instance);
-        //id - unique ID number of this traffic class
-        //name - human-readable name to identify this traffic class
-        //src - source (ingress) node for the traffic class
-        //dst - destination (egress) node for this traffic class
-        //vol_flows - volume of this traffic class in flows
-        //src_ip_prefix - src IP prefix that matches traffic in this class
-        //dst_ip_prefix - dst IP prefix that matches traffic in this class
-
-        traffic_node.put("tcid", id);
-        traffic_node.put("src", solService.getIntegerID(this.src));
-        traffic_node.put("dst", solService.getIntegerID(this.dst));
-        traffic_node.put("vol_flows", this.estimated_volume);
-        Criterion source_ip = this.selector.getCriterion(Criterion.Type.IPV4_SRC);
-        if (source_ip != null) {
-            IpPrefix source_prefix = ((IPCriterion) source_ip).ip();
-            String src_ip_prefix = source_prefix.toString();
-            traffic_node.put("src_ip_prefix", src_ip_prefix);
-        } else {
-            log.warn("Source IP prefix is unavailable for this traffic class");
-        }
-        Criterion dest_ip = this.selector.getCriterion(Criterion.Type.IPV4_DST);
-        if (dest_ip != null) {
-            IpPrefix dest_prefix = ((IPCriterion) dest_ip).ip();
-            String dst_ip_prefix = dest_prefix.toString();
-            traffic_node.put("dst_ip_prefix", dst_ip_prefix);
-        } else {
-            log.warn("Destination IP prefix is unavailable for this traffic class");
-        }
-        return traffic_node;
-    }
+//    public ObjectNode toJSONnode(int id) {
+//        ObjectNode traffic_node = new ObjectNode(JsonNodeFactory.instance);
+//        //id - unique ID number of this traffic class
+//        //name - human-readable name to identify this traffic class
+//        //src - source (ingress) node for the traffic class
+//        //dst - destination (egress) node for this traffic class
+//        //vol_flows - volume of this traffic class in flows
+//        //src_ip_prefix - src IP prefix that matches traffic in this class
+//        //dst_ip_prefix - dst IP prefix that matches traffic in this class
+//
+//        traffic_node.put("tcid", id);
+//        traffic_node.put("src", solService.getIntegerID(this.src));
+//        traffic_node.put("dst", solService.getIntegerID(this.dst));
+//        traffic_node.put("vol_flows", this.estimated_volume);
+//        Criterion source_ip = this.selector.getCriterion(Criterion.Type.IPV4_SRC);
+//        if (source_ip != null) {
+//            IpPrefix source_prefix = ((IPCriterion) source_ip).ip();
+//            String src_ip_prefix = source_prefix.toString();
+//            traffic_node.put("src_ip_prefix", src_ip_prefix);
+//        } else {
+//            log.warn("Source IP prefix is unavailable for this traffic class");
+//        }
+//        Criterion dest_ip = this.selector.getCriterion(Criterion.Type.IPV4_DST);
+//        if (dest_ip != null) {
+//            IpPrefix dest_prefix = ((IPCriterion) dest_ip).ip();
+//            String dst_ip_prefix = dest_prefix.toString();
+//            traffic_node.put("dst_ip_prefix", dst_ip_prefix);
+//        } else {
+//            log.warn("Destination IP prefix is unavailable for this traffic class");
+//        }
+//        return traffic_node;
+//    }
     //TODO: in the future far far away we can attempt to estimate flow volumes using the flow service and flow stats. Ambitious.
 }
