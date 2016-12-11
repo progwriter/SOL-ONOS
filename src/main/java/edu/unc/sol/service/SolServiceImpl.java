@@ -1,6 +1,7 @@
 package edu.unc.sol.service;
 
 import com.mashape.unirest.http.HttpResponse;
+import com.mashape.unirest.http.JsonNode;
 import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.exceptions.UnirestException;
 import edu.unc.sol.app.Optimization;
@@ -8,6 +9,8 @@ import edu.unc.sol.app.PathUpdateListener;
 import edu.unc.sol.app.TrafficClass;
 import edu.unc.sol.util.Config;
 import org.apache.felix.scr.annotations.*;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.onlab.graph.Edge;
 import org.onlab.graph.Vertex;
 import org.onlab.packet.Ip4Address;
@@ -29,6 +32,7 @@ import org.onosproject.net.topology.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.*;
 
 import static edu.unc.sol.service.Fairness.PROP_FAIR;
@@ -128,11 +132,10 @@ public class SolServiceImpl implements SolService {
             log.warn("No SOL server configured, using default values");
             solServer = "127.0.0.1:5000";
         }
-
-
         // TEST HERE:
         try {
-            HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("localhost:3333").asJson();
+            HttpResponse<com.mashape.unirest.http.JsonNode> sup =
+                    Unirest.post("http://localhost:3333").asJson();
         } catch (UnirestException e) {
             e.printStackTrace();
         }
@@ -162,71 +165,77 @@ public class SolServiceImpl implements SolService {
      * @param url the url of the endpoint.
      */
     private void sendTopology(String url) {
-        // Get a target from the rest client
-//        WebTarget target = restClient.target(url).path("/topology");
-//        // WARNING: we are running with the implicit assumption that that the topology does not change
-//        // Extract the topology from the topology service
-//        TopologyGraph topo = topologyService.getGraph(topologyService.currentTopology());
-//        // Now build our request
-//        Invocation.Builder builder = target.request(APPLICATION_JSON_TYPE);
-//        ObjectNode topoj = new ObjectNode(JsonNodeFactory.instance);
-//        // Make sure the graph is directed
-//        topoj.putObject("graph");
-//        topoj.put("directed", true);
-//        // Create holders for nodes and link
-//        ArrayNode nodes = topoj.putObject("nodes").putArray("items");
-//        ArrayNode links = topoj.putObject("links").putArray("items");
-//        // Extract nodes and links from the ONOS topology
-//        Set<TopologyVertex> topology_vertexes = topo.getVertexes();
-//        Set<TopologyEdge> topology_edges = topo.getEdges();
-//        int num_vertexes = topology_vertexes.size();
-//        int num_edges = topology_edges.size();
-//        vertex_mapping = new Vertex[num_vertexes];
-//        edge_mapping = new Edge[num_vertexes][num_vertexes];
-//        int vertex_index = 0;
-//        for (Vertex v : topology_vertexes) {
-//            DeviceId dev = ((DefaultTopologyVertex) v).deviceId();
-//            deviceMap.put(dev, vertex_index);
-//            linkMap.put(vertex_index, dev);
-//            ObjectNode node = nodes.addObject();
-//            node.put("id", getIntegerID(dev));
-//            // Devices in ONOS are by default switches (hosts are a separate category),
-//            // which is EXACTLY what we need
-//            node.put("services", "switch");
-//            // We need resources to be present, but for now we are not extracting any info
-//            // from ONOS
-//            node.putObject("resources");
-//            // TODO: Put resources of nodes, if any, like CPU  @victor
-//            // TODO: extract middlebox info from ONOS somehow? @victor
-//            vertex_index += 1;
-//        }
-//        for (Edge e : topology_edges) {
-//            // Note: by default ONOS graphs (and thus edges) are directed.
-//            ObjectNode link = links.addObject();
-//
-//            int srcid = getIntegerID(((DefaultTopologyVertex) e.src()).deviceId());
-//            int dstid = getIntegerID(((DefaultTopologyVertex) e.dst()).deviceId());
-//            link.put("source", srcid);
-//            link.put("target", dstid);
-//            ObjectNode resources = link.putObject("resources");
-//            ConnectPoint edge_link_src = (((DefaultTopologyEdge) e).link()).src();
-//            Port src_port = deviceService.getPort(edge_link_src.deviceId(), edge_link_src.port());
-//            // Store the bandwidth capacity in Mbps, easier this way
-//            long src_bandwith_mbps = src_port.portSpeed();
-//            resources.put("bw", src_bandwith_mbps);
-//        }
-//        // Send request to the specified URL as a HTTP POST request.
-//        Response response = builder.post(Entity.json(topoj));
-//        if (response.getStatus() != 200) {
-//            log.error(response.getStatusInfo().toString());
-//        } else {
-//            log.info("Successfully POSTed the topology");
-//        }
+        // WARNING: we are running with the implicit assumption that that the topology does not change
+        // Extract the topology from the topology service
+        TopologyGraph topo = topologyService.getGraph(topologyService.currentTopology());
+        // Now build our request
+        JSONObject topoj = new JSONObject();
+        // Make sure the graph is directed
+        topoj.put("graph", new JSONObject().put("directed", true));
+        // Create holders for nodes and link
+        JSONArray nodes = new JSONArray();
+        topoj.put("nodes", new JSONObject().put("items", nodes));
+        JSONArray links = new JSONArray();
+        topoj.put("links", new JSONObject().put("items", links));
+        // Extract nodes and links from the ONOS topology
+        Set<TopologyVertex> topology_vertexes = topo.getVertexes();
+        Set<TopologyEdge> topology_edges = topo.getEdges();
+        int num_vertexes = topology_vertexes.size();
+        int num_edges = topology_edges.size();
+        vertex_mapping = new Vertex[num_vertexes];
+        edge_mapping = new Edge[num_vertexes][num_vertexes];
+        int vertex_index = 0;
+        for (Vertex v : topology_vertexes) {
+            DeviceId dev = ((DefaultTopologyVertex) v).deviceId();
+            deviceMap.put(dev, vertex_index);
+            linkMap.put(vertex_index, dev);
+            JSONObject node = new JSONObject();
+            nodes.put(node);
+            node.put("id", getIntegerID(dev));
+            // Devices in ONOS are by default switches (hosts are a separate category),
+            // which is EXACTLY what we need
+            node.put("services", "switch");
+            // We need resources to be present, but for now we are not extracting any info
+            // from ONOS
+            node.put("resources", new JSONObject());
+            // TODO: Put resources of nodes, if any, like CPU  @victor
+            // TODO: extract middlebox info from ONOS somehow? @victor
+            vertex_index += 1;
+        }
+        for (Edge e : topology_edges) {
+            // Note: by default ONOS graphs (and thus edges) are directed.
+            JSONObject link = new JSONObject();
+
+            int srcid = getIntegerID(((DefaultTopologyVertex) e.src()).deviceId());
+            int dstid = getIntegerID(((DefaultTopologyVertex) e.dst()).deviceId());
+            link.put("source", srcid);
+            link.put("target", dstid);
+            JSONObject resources = new JSONObject();
+            link.put("resources", resources);
+            ConnectPoint edge_link_src = (((DefaultTopologyEdge) e).link()).src();
+            Port src_port = deviceService.getPort(edge_link_src.deviceId(), edge_link_src.port());
+            // Store the bandwidth capacity in Mbps, easier this way
+            long src_bandwith_mbps = src_port.portSpeed();
+            resources.put("bw", src_bandwith_mbps);
+        }
+        // Send request to the specified URL as a HTTP POST request.
+        HttpResponse resp = null;
+        try {
+            resp = Unirest.post(url).body(topoj).asJson();
+        } catch (UnirestException e) {
+            log.error("Failed to post topology", e);
+        }
+        if (resp.getStatus() != 200) {
+            log.error(resp.getStatusText());
+        } else {
+            log.info("Successfully POSTed the topology");
+        }
     }
 
     @Deactivate
-    protected void deactivate() {
+    protected void deactivate() throws IOException {
         // TODO: any cleanup if necessary @sanjay
+        Unirest.shutdown();
         log.info("Stopped the SOL service");
     }
 
