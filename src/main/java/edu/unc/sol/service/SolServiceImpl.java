@@ -367,109 +367,109 @@ public class SolServiceImpl implements SolService {
         return link_list;
     }
 
-//    private List<Map<IpPrefix, Double>> create_fractions(IpPrefix prefix, JsonNode paths) {
-//
-//        List<Map<IpPrefix, Double>> tables = new ArrayList<Map<IpPrefix, Double>>();
-//
-//        for (int i = 0; i < paths.size(); i++) {
-//            tables.add(new HashMap<IpPrefix, Double>());
-//        }
-//
-//        int precision = 32 - prefix.prefixLength();
-//        long power = precision;
-//
-//        double fraction_weight = Math.pow(2.0, precision);
-//        long new_total = (long) fraction_weight;
-//
-//        //Normalize the Weights for each of the paths with this new pow of 2
-//        //index 0 is the path the weight is for when we sort the array
-//        //index 1 is the curr_load for the path
-//        long[][] normalized_weights = new long[paths.size()][2];
-//        long curr_new_total = new_total;
-//        int weight_index = 0;
-//        // @sanjay_prefix This loop will potentially need to change as well, see comments below.
-//        for (final JsonNode pathobj : paths) {
-//            double fraction = pathobj.get("fraction").asDouble();
-//            long weighted = (long) (fraction * fraction_weight);
-//            if (weight_index == (paths.size() - 1)) {
-//                normalized_weights[weight_index][0] = weight_index;
-//                normalized_weights[weight_index][1] = curr_new_total;
-//            } else {
-//                normalized_weights[weight_index][0] = weight_index;
-//                normalized_weights[weight_index][1] = weighted;
-//                curr_new_total -= weighted;
-//            }
-//            weight_index += 1;
-//        }
-//
-//        boolean has_non_zero = true;
-//
-//        //keep creating prefix rules, along with fractions for largest load
-//        long cumulative_load = 0;
-//        while (has_non_zero) {
-//            long[][] sorted_weights = sort_weights(normalized_weights);
-//            int i = 0; //always create a rule for the max load after sorting
-//            long curr_load = sorted_weights[i][1];
-//
-//            if (curr_load == 0) {
-//                has_non_zero = false;
-//                continue;
-//            }
-//
-//            long highest_power_two = (long)
-//                    (Math.log(curr_load) / Math.log(2.0));
-//
-//            String binary = Integer.toBinaryString((int) cumulative_load);
-//
-//            //take the rightmost 'power' bits
-//            String proper_binary = "";
-//            if (power > binary.length()) {
-//                for (int k = 0; k < power - binary.length(); k++) {
-//                    proper_binary += "0";
-//                }
-//                proper_binary += binary;
-//            } else {
-//                proper_binary = binary.substring(binary.length() - (int) power, binary.length());
-//            }
-//
-//            //add the first ('power' - 'highest_power_two') bits to the prefix
-//            String prefix_add_bits =
-//                    proper_binary.substring(0, (int) (power - highest_power_two));
-//            Double prefix_fraction =
-//                    new Double(Math.pow(2.0, highest_power_two) / (new_total * 1.0));
-//
-//            String extra_bits = prefix_add_bits;
-//            IpPrefix curr_prefix = prefix;
-//            int curr_prefix_len = curr_prefix.prefixLength();
-//            int shift = 31 - curr_prefix_len;
-//            Ip4Address curr_ip =
-//                    curr_prefix.address().getIp4Address();
-//            int curr_ip_int = curr_ip.toInt();
-//            int curr_mask = 0;
-//            for (int ind = 0; ind < extra_bits.length(); ind++) {
-//                String curr_char =
-//                        extra_bits.substring(ind, ind + 1);
-//                int curr_bit =
-//                        Integer.valueOf(curr_char).intValue();
-//                curr_mask =
-//                        curr_mask | (curr_bit << (shift - ind));
-//            }
-//            int new_ip_int = curr_ip_int | curr_mask;
-//            IpAddress new_ip = IpAddress.valueOf(new_ip_int);
-//            int new_prefix_len =
-//                    curr_prefix_len + extra_bits.length();
-//            IpPrefix new_prefix =
-//                    IpPrefix.valueOf(new_ip, new_prefix_len);
-//
-//            tables.get((int) sorted_weights[i][0]).put(new_prefix, prefix_fraction);
-//
-//            normalized_weights[(int) (sorted_weights[i][0])][1] -= (long) Math.pow(2.0, highest_power_two);
-//            cumulative_load += (int) Math.pow(2.0, highest_power_two);
-//        }
-//
-//        return tables;
-//    }
-//
+    private List<Map<IpPrefix, Double>> create_fractions(IpPrefix prefix, JSONArray paths) {
+	
+        List<Map<IpPrefix, Double>> tables = new ArrayList<Map<IpPrefix, Double>>();
+	
+        for (int i = 0; i < paths.length(); i++) {
+            tables.add(new HashMap<IpPrefix, Double>());
+        }
+	
+        int precision = 32 - prefix.prefixLength();
+        long power = precision;
+	
+        double fraction_weight = Math.pow(2.0, precision);
+        long new_total = (long) fraction_weight;
+	
+	//Normalize the Weights for each of the paths with this new pow of 2
+        //index 0 is the path the weight is for when we sort the array
+        //index 1 is the curr_load for the path
+        long[][] normalized_weights = new long[paths.length()][2];
+        long curr_new_total = new_total;
+        int weight_index = 0;
+        for (int i = 0; i < paths.length(); i++) {
+	    JSONObject pathobj = paths.getJSONObject(i);
+            double fraction = pathobj.getDouble("fraction");
+            long weighted = (long) (fraction * fraction_weight);
+            if (weight_index == (paths.length() - 1)) {
+                normalized_weights[weight_index][0] = weight_index;
+                normalized_weights[weight_index][1] = curr_new_total;
+            } else {
+                normalized_weights[weight_index][0] = weight_index;
+                normalized_weights[weight_index][1] = weighted;
+                curr_new_total -= weighted;
+            }
+            weight_index += 1;
+        }
+
+        boolean has_non_zero = true;
+
+        //keep creating prefix rules, along with fractions for largest load
+        long cumulative_load = 0;
+        while (has_non_zero) {
+            long[][] sorted_weights = sort_weights(normalized_weights);
+            int i = 0; //always create a rule for the max load after sorting
+            long curr_load = sorted_weights[i][1];
+
+            if (curr_load == 0) {
+                has_non_zero = false;
+                continue;
+            }
+
+            long highest_power_two = (long)
+                    (Math.log(curr_load) / Math.log(2.0));
+
+            String binary = Integer.toBinaryString((int) cumulative_load);
+
+            //take the rightmost 'power' bits
+            String proper_binary = "";
+            if (power > binary.length()) {
+                for (int k = 0; k < power - binary.length(); k++) {
+                    proper_binary += "0";
+                }
+                proper_binary += binary;
+            } else {
+                proper_binary = binary.substring(binary.length() - (int) power, binary.length());
+            }
+
+            //add the first ('power' - 'highest_power_two') bits to the prefix
+	    String prefix_add_bits =
+		proper_binary.substring(0, (int) (power - highest_power_two));
+            Double prefix_fraction =
+		new Double(Math.pow(2.0, highest_power_two) / (new_total * 1.0));
+
+            String extra_bits = prefix_add_bits;
+            IpPrefix curr_prefix = prefix;
+            int curr_prefix_len = curr_prefix.prefixLength();
+            int shift = 31 - curr_prefix_len;
+            Ip4Address curr_ip =
+                    curr_prefix.address().getIp4Address();
+            int curr_ip_int = curr_ip.toInt();
+            int curr_mask = 0;
+            for (int ind = 0; ind < extra_bits.length(); ind++) {
+                String curr_char =
+                        extra_bits.substring(ind, ind + 1);
+                int curr_bit =
+                        Integer.valueOf(curr_char).intValue();
+                curr_mask =
+                        curr_mask | (curr_bit << (shift - ind));
+            }
+            int new_ip_int = curr_ip_int | curr_mask;
+            IpAddress new_ip = IpAddress.valueOf(new_ip_int);
+            int new_prefix_len =
+                    curr_prefix_len + extra_bits.length();
+            IpPrefix new_prefix =
+                    IpPrefix.valueOf(new_ip, new_prefix_len);
+
+            tables.get((int) sorted_weights[i][0]).put(new_prefix, prefix_fraction);
+
+            normalized_weights[(int) (sorted_weights[i][0])][1] -= (long) Math.pow(2.0, highest_power_two);
+            cumulative_load += (int) Math.pow(2.0, highest_power_two);
+        }
+
+        return tables;
+    }
+
 //    private Collection<PathIntent> computeIntents(JsonNode all_paths) {
 //        assert all_paths.isArray();
 //
