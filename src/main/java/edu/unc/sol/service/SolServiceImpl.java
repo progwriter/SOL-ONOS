@@ -470,79 +470,81 @@ public class SolServiceImpl implements SolService {
         return tables;
     }
 
-//    private Collection<PathIntent> computeIntents(JsonNode all_paths) {
-//        assert all_paths.isArray();
-//
-//        ArrayList<PathIntent> result = new ArrayList<PathIntent>();
-//
-//        for (final JsonNode tcjson : all_paths) {
-//            // Extract the traffic class
-//            int tcid = tcjson.get("tcid").asInt();
-//            TrafficClass tc = allTrafficClasses.get(tcid);
-//            TrafficSelector original_selector = tc.getSelector();
-//
-//            JsonNode paths = tcjson.get("paths");
-//            assert paths.isArray();
-//
-//            //@victor is this correct? how do we add the tcid to the intent we are adding? What should first arg me, "of", "snmp"?
-//            ProviderId provider_id = new ProviderId("of", Integer.toString(tcid));
-//
-//            if (paths.size() == 1) {
-//                PathIntent.Builder intent_builder = PathIntent.builder();
-//                DefaultPath curr_path =
-//                        new DefaultPath(provider_id, create_links(paths.get(0)), 1.0, null);
-//                intent_builder.path(curr_path);
-//                intent_builder.selector(original_selector);
-//
-//                PathIntent path_intent = intent_builder.build();
-//                result.add(path_intent);
-//                continue;
-//            }
-//            IpPrefix prefix = ((IPCriterion) original_selector.getCriterion(Criterion.Type.IPV4_SRC)).ip();
-//
-//            List<Map<IpPrefix, Double>> tables = create_fractions(prefix, paths);
-//
-//            int path_index = -1;
-//            for (final JsonNode pathobj : paths) {
-//                path_index++;
-//
-//                // Get the path nodes
-//                JsonNode pathnodes = pathobj.get("nodes");
-//
-//                List<Link> link_list = create_links(pathnodes);
-//
-//                Set<Criterion> original_criteria = original_selector.criteria();
-//
-//                Map<IpPrefix, Double> curr_table = tables.get(path_index);
-//                //Loop through each wildcard rule we have for this path
-//                for (IpPrefix new_prefix : curr_table.keySet()) {
-//                    TrafficSelector.Builder ts_builder =
-//                            DefaultTrafficSelector.builder();
-//                    for (Criterion curr_criteria : original_criteria) {
-//                        if (curr_criteria.type() != Criterion.Type.IPV4_SRC) {
-//                            ts_builder.add(curr_criteria);
-//                        } else {
-//                            ts_builder.add(Criteria.matchIPSrc(new_prefix));
-//                        }
-//                    }
-//
-//                    TrafficSelector new_selector = ts_builder.build();
-//
-//                    PathIntent.Builder intent_builder = PathIntent.builder();
-//                    DefaultPath curr_path =
-//                            new DefaultPath(provider_id, link_list,
-//                                    tables.get(path_index).get(new_prefix), null);
-//                    intent_builder.path(curr_path);
-//                    intent_builder.selector(new_selector);
-//
-//                    PathIntent path_intent = intent_builder.build();
-//                    result.add(path_intent);
-//                }
-//            }
-//        }
-//        return result;
-//    }
+    private Collection<PathIntent> computeIntents(JSONArray all_paths) {
 
+        ArrayList<PathIntent> result = new ArrayList<PathIntent>();
+
+        for (int i = 0; i < all_paths.length(); i++) {
+	    JSONObject tcjson = all_paths.getJSONObject(i);
+	    
+            // Extract the traffic class
+            int tcid = tcjson.getInt("tcid");
+            TrafficClass tc = allTrafficClasses.get(tcid);
+            TrafficSelector original_selector = tc.getSelector();
+
+            JSONArray paths = tcjson.getJSONArray("paths");
+	    
+            //@victor is this correct? how do we add the tcid to the intent we are adding? What should first arg me, "of", "snmp"?
+            ProviderId provider_id = new ProviderId("of", Integer.toString(tcid));
+	    
+            if (paths.length() == 1) {
+                PathIntent.Builder intent_builder = PathIntent.builder();
+		JSONObject pathobj = paths.getJSONObject(0);
+		JSONArray pathnodes = pathobj.getJSONArray("nodes");
+                DefaultPath curr_path =
+                        new DefaultPath(provider_id, create_links(pathnodes), 1.0, null);
+                intent_builder.path(curr_path);
+                intent_builder.selector(original_selector);
+
+                PathIntent path_intent = intent_builder.build();
+                result.add(path_intent);
+                continue;
+            }
+            IpPrefix prefix = ((IPCriterion) original_selector.getCriterion(Criterion.Type.IPV4_SRC)).ip();
+
+            List<Map<IpPrefix, Double>> tables = create_fractions(prefix, paths);
+
+            int path_index = -1;
+            for (int j = 0; j < paths.length(); j++) {
+		JSONObject pathobj = paths.getJSONObject(j);
+                path_index++;
+
+                // Get the path nodes
+                JSONArray pathnodes = pathobj.getJSONArray("nodes");
+
+                List<Link> link_list = create_links(pathnodes);
+
+                Set<Criterion> original_criteria = original_selector.criteria();
+
+                Map<IpPrefix, Double> curr_table = tables.get(path_index);
+                // Loop through each wildcard rule we have for this path
+                for (IpPrefix new_prefix : curr_table.keySet()) {
+                    TrafficSelector.Builder ts_builder =
+                            DefaultTrafficSelector.builder();
+                    for (Criterion curr_criteria : original_criteria) {
+                        if (curr_criteria.type() != Criterion.Type.IPV4_SRC) {
+                            ts_builder.add(curr_criteria);
+                        } else {
+                            ts_builder.add(Criteria.matchIPSrc(new_prefix));
+                        }
+                    }
+
+                    TrafficSelector new_selector = ts_builder.build();
+
+                    PathIntent.Builder intent_builder = PathIntent.builder();
+                    DefaultPath curr_path =
+                            new DefaultPath(provider_id, link_list,
+                                    tables.get(path_index).get(new_prefix), null);
+                    intent_builder.path(curr_path);
+                    intent_builder.selector(new_selector);
+                    PathIntent path_intent = intent_builder.build();
+                    result.add(path_intent);
+                }
+            }
+        }
+        return result;
+    }
+    
 
     /**
      * Get the integer id assigned to an ONOS DeviceID
