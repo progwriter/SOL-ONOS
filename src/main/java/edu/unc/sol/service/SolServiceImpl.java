@@ -132,19 +132,12 @@ public class SolServiceImpl implements SolService {
             log.warn("No SOL server configured, using default values");
             solServer = "127.0.0.1:5000";
         }
-        // TEST HERE:
-	/*        try {
-            HttpResponse<com.mashape.unirest.http.JsonNode> sup =
-                    Unirest.post("http://localhost:3333").asJson();
-        } catch (UnirestException e) {
-            e.printStackTrace();
-        }
-	*/
         // Build a proper url for the rest client
         StringBuilder builder = new StringBuilder();
         remoteURL = builder.append("http://").append(solServer).append("/api/v1/").toString();
         // Send the topology to the SOL server
-        sendTopology(remoteURL);
+	//@victor should this be URL + "/topology"? -sanjay
+        sendTopology(remoteURL + "/topology");
         // Start the monitor-solve loop in a new thread
         new Thread(new SolutionCalculator()).run();
         log.info("Started the SOL service");
@@ -271,40 +264,44 @@ public class SolServiceImpl implements SolService {
             }
         }
         // Send the composition request over:
-//        WebTarget target = restClient.target(remoteURL).path("/compose");
-//        Invocation.Builder builder = target.request(APPLICATION_JSON_TYPE);
-//        Response resp = builder.post(Entity.json(composeObject));
-//        if (resp.getStatus() != 200) {
-//            log.error("Composition request failed! " + resp.getStatusInfo().toString());
-//        } else {
-//            log.debug("Composition POST successful");
-//        }
-//        processComposeResponse(resp);
+	HttpResponse resp = null;
+        try {
+            resp = Unirest.post(remoteURL + "/compose").body(composeObject).asJson();
+        } catch (UnirestException e) {
+            log.error("Failed to post composition", e);
+        }
+        if (resp.getStatus() != 200) {
+            log.error("Composition request failed!");
+        } else {
+            log.info("Composition POST succesful");
+        }
+        processComposeResponse(resp);
     }
 
-//    private void processComposeResponse(Response resp) {
+    private void processComposeResponse(HttpResponse resp) {
         // Get the response payload
         // TODO: I hope arrays as top-level elements are allowed, check this @victor
-//        ArrayNode data = (ArrayNode) resp.getEntity();
-//        JsonNode app_paths;
-//        Iterator<JsonNode> it = data.elements();
-//        while (it.hasNext()) {
-//            app_paths = it.next();
-//
-//            // Extract the app name, and id
-//            String appname = app_paths.get("app").textValue();
-//            ApplicationId appid = core.getAppId(appname);
-//
-//            // Extract paths
-//            JsonNode all_paths = data.get("tcs");
-//
-//            // Grab all the listeners registered for this app
-//            for (PathUpdateListener l : listenerMap.get(appid)) {
-//                // Send the created path intents to the listeners
-//                l.updatePaths(computeIntents(all_paths));
-//            }
-//        }
-//    }
+
+	//@victor will this properly get the response entity? -sanjay
+        JSONArray data = (JSONArray) resp.getBody();
+        JSONObject app_paths;
+	for (int i = 0; i < data.length(); i++) {
+            app_paths = data.getJSONObject(i);
+
+            // Extract the app name, and id
+            String appname = app_paths.getString("app");
+            ApplicationId appid = core.getAppId(appname);
+
+            // Extract paths
+            JSONArray all_paths = app_paths.getJSONArray("tcs");
+
+            // Grab all the listeners registered for this app
+            for (PathUpdateListener l : listenerMap.get(appid)) {
+                // Send the created path intents to the listeners
+                l.updatePaths(computeIntents(all_paths));
+            }
+        }
+    }
 
     //function to sort our custom arr we use in computeIntents
     private long[][] sort_weights(long[][] arr) {
