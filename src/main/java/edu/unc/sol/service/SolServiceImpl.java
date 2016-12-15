@@ -244,26 +244,29 @@ public class SolServiceImpl implements SolService {
      */
     private void recompute() {
         // Serialize all of our apps and post them to the server
-//        ObjectNode composeObject = new ObjectNode(JsonNodeFactory.instance);
-//        composeObject.put("fairness", PROP_FAIR.toString());
-//
-//        HashMap<TrafficClass, Integer> tc_ids = new HashMap<>();
-//        int tc_counter = 0;
-//        ArrayNode applist = composeObject.putArray("apps");
-//        for (ApplicationId appid : optimizations.keySet()) {
-//            ObjectNode app = applist.addObject();
-//            app.put("id", appid.toString());
-//            //TODO: allow predicate customization in the future @victor
-//            app.put("predicate", "null_predicate");
-//            app.setAll(optimizations.get(appid).toJSONnode());
-//            ArrayNode tc_list = app.putArray("traffic_classes");
-//            for (TrafficClass tc : tcMap.get(appid)) {
-//                tc_list.add(tc.toJSONnode(tc_counter++));
-//                // Keep track of all traffic classes so we can decode the response
-//                allTrafficClasses.add(tc);
-//            }
-//        }
-//        // Send the composition request over:
+        JSONObject composeObject = new JSONObject();
+        composeObject.put("fairness", PROP_FAIR.toString());
+
+        HashMap<TrafficClass, Integer> tc_ids = new HashMap<>();
+        int tc_counter = 0;
+	JSONArray applist = new JSONArray();
+	composeObject.put("apps", new JSONObject().put("items", applist));
+	for (ApplicationId appid : optimizations.keySet()) {
+	    JSONObject app = new JSONObject();
+	    applist.put(app);
+	    app.put("id", appid.toString());
+            //TODO: allow predicate customization in the future @victor
+            app.put("predicate", "null_predicate");
+	    //            app.setAll(optimizations.get(appid).toJSONnode());
+	    JSONArray tc_list = new JSONArray();
+	    app.put("traffic_classes", new JSONObject().put("items", tc_list));
+            for (TrafficClass tc : tcMap.get(appid)) {
+		//                tc_list.add(tc.toJSONnode(tc_counter++));
+                // Keep track of all traffic classes so we can decode the response
+                allTrafficClasses.add(tc);
+            }
+        }
+        // Send the composition request over:
 //        WebTarget target = restClient.target(remoteURL).path("/compose");
 //        Invocation.Builder builder = target.request(APPLICATION_JSON_TYPE);
 //        Response resp = builder.post(Entity.json(composeObject));
