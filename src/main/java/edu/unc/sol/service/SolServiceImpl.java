@@ -257,11 +257,15 @@ public class SolServiceImpl implements SolService {
 	    app.put("id", appid.toString());
             //TODO: allow predicate customization in the future @victor
             app.put("predicate", "null_predicate");
-	    //            app.setAll(optimizations.get(appid).toJSONnode());
+	    //	    app.setAll(optimizations.get(appid).toJSONnode());
+	    JSONObject opnode = optimizations.get(appid).toJSONnode();
+	    for (String key : JSONObject.getNames(opnode)) {
+		app.put(key, opnode.get(key));
+	    }
 	    JSONArray tc_list = new JSONArray();
 	    app.put("traffic_classes", new JSONObject().put("items", tc_list));
             for (TrafficClass tc : tcMap.get(appid)) {
-		//                tc_list.add(tc.toJSONnode(tc_counter++));
+		tc_list.put(tc.toJSONnode(tc_counter++));
                 // Keep track of all traffic classes so we can decode the response
                 allTrafficClasses.add(tc);
             }

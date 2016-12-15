@@ -1,6 +1,7 @@
 package edu.unc.sol.app;
 
-
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.util.Set;
 
@@ -48,18 +49,24 @@ public class Optimization {
     /**
      * JSON-compatible representation of this optimization
      */
-//    public ObjectNode toJSONnode() {
-//        // The overall container
-//        ObjectNode o = new ObjectNode(JsonNodeFactory.instance);
-//        // Objective node
-//        ObjectNode obj = o.putObject("objective");
-//        obj.setAll(this.objective.toJSONnode());
-//        // The constraints will be array of strings
-//        ArrayNode constr = o.putArray("constraints");
-//        for (Constraint c : this.constraints) {
-//            constr.add(c.toString());
-//        }
-//        // Return the container
-//        return o;
-//    }
+    public JSONObject toJSONnode() {
+        // The overall container
+	JSONObject o = new JSONObject();
+        // Objective node
+	JSONObject obj = new JSONObject();
+	o.put("objective", obj);
+	//        obj.setAll(this.objective.toJSONnode());
+	JSONObject objnode = this.objective.toJSONnode();
+	for (String key : JSONObject.getNames(objnode)) {
+	    obj.put(key, objnode.get(key));
+	}
+        // The constraints will be array of strings
+	JSONArray constr = new JSONArray();
+	o.put("constraints", constr);
+        for (Constraint c : this.constraints) {
+            constr.put(c.toString());
+        }
+        // Return the container
+        return o;
+    }
 }
