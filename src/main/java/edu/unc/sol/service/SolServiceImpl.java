@@ -133,13 +133,13 @@ public class SolServiceImpl implements SolService {
             solServer = "127.0.0.1:5000";
         }
         // TEST HERE:
-        try {
+	/*        try {
             HttpResponse<com.mashape.unirest.http.JsonNode> sup =
                     Unirest.post("http://localhost:3333").asJson();
         } catch (UnirestException e) {
             e.printStackTrace();
         }
-
+	*/
         // Build a proper url for the rest client
         StringBuilder builder = new StringBuilder();
         remoteURL = builder.append("http://").append(solServer).append("/api/v1/").toString();
@@ -324,47 +324,48 @@ public class SolServiceImpl implements SolService {
         return new_arr;
     }
 
-//    private List<Link> create_links(JsonNode pathnodes) {
-//        List<Link> link_list = new ArrayList<Link>();
+    private List<Link> create_links(JSONArray pathnodes) {
+        List<Link> link_list = new ArrayList<Link>();
 
-//        JsonNode prev_node = null;
-//        for (JsonNode node : pathnodes) {
-//            if (prev_node == null) {
-//                prev_node = node;
-//                continue;
-//            } else {
-//                DefaultLink.Builder link_builder =
-//                        DefaultLink.builder();
-//                int prev_id = prev_node.get("id").asInt();
-//                int curr_id = node.get("id").asInt();
-//
-//                DeviceId prev_dev = linkMap.get(prev_id);
-//                DeviceId next_dev = linkMap.get(curr_id);
-//
-//                ConnectPoint src_connect_point = null;
-//                ConnectPoint dst_connect_point = null;
-//
-//                Set<Link> src_egress =
-//                        linkService.getDeviceEgressLinks(prev_dev);
-//
-//                for (Link curr_link : src_egress) {
-//                    ConnectPoint curr_connect_point = curr_link.dst();
-//                    DeviceId curr_dev = curr_connect_point.deviceId();
-//                    if (curr_dev.equals(next_dev)) {
-//                        dst_connect_point = curr_connect_point;
-//                        src_connect_point = curr_link.src();
-//                    }
-//                }
-//
-//                link_builder.src(src_connect_point);
-//                link_builder.dst(dst_connect_point);
-//                DefaultLink link = link_builder.build();
-//                link_list.add((Link) link);
-//                prev_node = node;
-//            }
-//        }
-//        return link_list;
-//    }
+        JSONObject prev_node = null;
+	for (int i = 0; i < pathnodes.length(); i++) {
+	    JSONObject node = pathnodes.getJSONObject(i);
+            if (prev_node == null) {
+                prev_node = node;
+                continue;
+            } else {
+                DefaultLink.Builder link_builder =
+                        DefaultLink.builder();
+                int prev_id = prev_node.getInt("id");
+                int curr_id = node.getInt("id");
+
+                DeviceId prev_dev = linkMap.get(prev_id);
+                DeviceId next_dev = linkMap.get(curr_id);
+
+                ConnectPoint src_connect_point = null;
+                ConnectPoint dst_connect_point = null;
+
+                Set<Link> src_egress =
+                        linkService.getDeviceEgressLinks(prev_dev);
+
+                for (Link curr_link : src_egress) {
+                    ConnectPoint curr_connect_point = curr_link.dst();
+                    DeviceId curr_dev = curr_connect_point.deviceId();
+                    if (curr_dev.equals(next_dev)) {
+                        dst_connect_point = curr_connect_point;
+                        src_connect_point = curr_link.src();
+                    }
+                }
+
+                link_builder.src(src_connect_point);
+                link_builder.dst(dst_connect_point);
+		DefaultLink link = link_builder.build();
+                link_list.add((Link) link);
+                prev_node = node;
+            }
+        }
+        return link_list;
+    }
 
 //    private List<Map<IpPrefix, Double>> create_fractions(IpPrefix prefix, JsonNode paths) {
 //
