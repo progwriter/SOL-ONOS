@@ -132,19 +132,12 @@ public class SolServiceImpl implements SolService {
             log.warn("No SOL server configured, using default values");
             solServer = "127.0.0.1:5000";
         }
-        // TEST HERE:
-        try {
-            HttpResponse<com.mashape.unirest.http.JsonNode> sup =
-                    Unirest.post("http://localhost:3333").asJson();
-        } catch (UnirestException e) {
-            e.printStackTrace();
-        }
-
         // Build a proper url for the rest client
         StringBuilder builder = new StringBuilder();
         remoteURL = builder.append("http://").append(solServer).append("/api/v1/").toString();
         // Send the topology to the SOL server
-        sendTopology(remoteURL);
+	//@victor should this be URL + "/topology"? -sanjay
+        sendTopology(remoteURL + "/topology");
         // Start the monitor-solve loop in a new thread
         new Thread(new SolutionCalculator()).run();
         log.info("Started the SOL service");
@@ -244,60 +237,71 @@ public class SolServiceImpl implements SolService {
      */
     private void recompute() {
         // Serialize all of our apps and post them to the server
-//        ObjectNode composeObject = new ObjectNode(JsonNodeFactory.instance);
-//        composeObject.put("fairness", PROP_FAIR.toString());
-//
-//        HashMap<TrafficClass, Integer> tc_ids = new HashMap<>();
-//        int tc_counter = 0;
-//        ArrayNode applist = composeObject.putArray("apps");
-//        for (ApplicationId appid : optimizations.keySet()) {
-//            ObjectNode app = applist.addObject();
-//            app.put("id", appid.toString());
-//            //TODO: allow predicate customization in the future @victor
-//            app.put("predicate", "null_predicate");
-//            app.setAll(optimizations.get(appid).toJSONnode());
-//            ArrayNode tc_list = app.putArray("traffic_classes");
-//            for (TrafficClass tc : tcMap.get(appid)) {
-//                tc_list.add(tc.toJSONnode(tc_counter++));
-//                // Keep track of all traffic classes so we can decode the response
-//                allTrafficClasses.add(tc);
-//            }
-//        }
-//        // Send the composition request over:
-//        WebTarget target = restClient.target(remoteURL).path("/compose");
-//        Invocation.Builder builder = target.request(APPLICATION_JSON_TYPE);
-//        Response resp = builder.post(Entity.json(composeObject));
-//        if (resp.getStatus() != 200) {
-//            log.error("Composition request failed! " + resp.getStatusInfo().toString());
-//        } else {
-//            log.debug("Composition POST successful");
-//        }
-//        processComposeResponse(resp);
+        JSONObject composeObject = new JSONObject();
+        composeObject.put("fairness", PROP_FAIR.toString());
+
+        HashMap<TrafficClass, Integer> tc_ids = new HashMap<>();
+        int tc_counter = 0;
+	JSONArray applist = new JSONArray();
+	composeObject.put("apps", new JSONObject().put("items", applist));
+	for (ApplicationId appid : optimizations.keySet()) {
+	    JSONObject app = new JSONObject();
+	    applist.put(app);
+	    app.put("id", appid.toString());
+            //TODO: allow predicate customization in the future @victor
+            app.put("predicate", "null_predicate");
+	    //	    app.setAll(optimizations.get(appid).toJSONnode());
+	    JSONObject opnode = optimizations.get(appid).toJSONnode();
+	    for (String key : JSONObject.getNames(opnode)) {
+		app.put(key, opnode.get(key));
+	    }
+	    JSONArray tc_list = new JSONArray();
+	    app.put("traffic_classes", new JSONObject().put("items", tc_list));
+            for (TrafficClass tc : tcMap.get(appid)) {
+		tc_list.put(tc.toJSONnode(tc_counter++));
+                // Keep track of all traffic classes so we can decode the response
+                allTrafficClasses.add(tc);
+            }
+        }
+        // Send the composition request over:
+	HttpResponse resp = null;
+        try {
+            resp = Unirest.post(remoteURL + "/compose").body(composeObject).asJson();
+        } catch (UnirestException e) {
+            log.error("Failed to post composition", e);
+        }
+        if (resp.getStatus() != 200) {
+            log.error("Composition request failed!");
+        } else {
+            log.info("Composition POST succesful");
+        }
+        processComposeResponse(resp);
     }
 
-//    private void processComposeResponse(Response resp) {
+    private void processComposeResponse(HttpResponse resp) {
         // Get the response payload
         // TODO: I hope arrays as top-level elements are allowed, check this @victor
-//        ArrayNode data = (ArrayNode) resp.getEntity();
-//        JsonNode app_paths;
-//        Iterator<JsonNode> it = data.elements();
-//        while (it.hasNext()) {
-//            app_paths = it.next();
-//
-//            // Extract the app name, and id
-//            String appname = app_paths.get("app").textValue();
-//            ApplicationId appid = core.getAppId(appname);
-//
-//            // Extract paths
-//            JsonNode all_paths = data.get("tcs");
-//
-//            // Grab all the listeners registered for this app
-//            for (PathUpdateListener l : listenerMap.get(appid)) {
-//                // Send the created path intents to the listeners
-//                l.updatePaths(computeIntents(all_paths));
-//            }
-//        }
-//    }
+
+	//@victor will this properly get the response entity? -sanjay
+        JSONArray data = (JSONArray) resp.getBody();
+        JSONObject app_paths;
+	for (int i = 0; i < data.length(); i++) {
+            app_paths = data.getJSONObject(i);
+
+            // Extract the app name, and id
+            String appname = app_paths.getString("app");
+            ApplicationId appid = core.getAppId(appname);
+
+            // Extract paths
+            JSONArray all_paths = app_paths.getJSONArray("tcs");
+
+            // Grab all the listeners registered for this app
+            for (PathUpdateListener l : listenerMap.get(appid)) {
+                // Send the created path intents to the listeners
+                l.updatePaths(computeIntents(all_paths));
+            }
+        }
+    }
 
     //function to sort our custom arr we use in computeIntents
     private long[][] sort_weights(long[][] arr) {
@@ -324,224 +328,227 @@ public class SolServiceImpl implements SolService {
         return new_arr;
     }
 
-//    private List<Link> create_links(JsonNode pathnodes) {
-//        List<Link> link_list = new ArrayList<Link>();
+    private List<Link> create_links(JSONArray pathnodes) {
+        List<Link> link_list = new ArrayList<Link>();
 
-//        JsonNode prev_node = null;
-//        for (JsonNode node : pathnodes) {
-//            if (prev_node == null) {
-//                prev_node = node;
-//                continue;
-//            } else {
-//                DefaultLink.Builder link_builder =
-//                        DefaultLink.builder();
-//                int prev_id = prev_node.get("id").asInt();
-//                int curr_id = node.get("id").asInt();
-//
-//                DeviceId prev_dev = linkMap.get(prev_id);
-//                DeviceId next_dev = linkMap.get(curr_id);
-//
-//                ConnectPoint src_connect_point = null;
-//                ConnectPoint dst_connect_point = null;
-//
-//                Set<Link> src_egress =
-//                        linkService.getDeviceEgressLinks(prev_dev);
-//
-//                for (Link curr_link : src_egress) {
-//                    ConnectPoint curr_connect_point = curr_link.dst();
-//                    DeviceId curr_dev = curr_connect_point.deviceId();
-//                    if (curr_dev.equals(next_dev)) {
-//                        dst_connect_point = curr_connect_point;
-//                        src_connect_point = curr_link.src();
-//                    }
-//                }
-//
-//                link_builder.src(src_connect_point);
-//                link_builder.dst(dst_connect_point);
-//                DefaultLink link = link_builder.build();
-//                link_list.add((Link) link);
-//                prev_node = node;
-//            }
-//        }
-//        return link_list;
-//    }
+        JSONObject prev_node = null;
+	for (int i = 0; i < pathnodes.length(); i++) {
+	    JSONObject node = pathnodes.getJSONObject(i);
+            if (prev_node == null) {
+                prev_node = node;
+                continue;
+            } else {
+                DefaultLink.Builder link_builder =
+                        DefaultLink.builder();
+                int prev_id = prev_node.getInt("id");
+                int curr_id = node.getInt("id");
 
-//    private List<Map<IpPrefix, Double>> create_fractions(IpPrefix prefix, JsonNode paths) {
-//
-//        List<Map<IpPrefix, Double>> tables = new ArrayList<Map<IpPrefix, Double>>();
-//
-//        for (int i = 0; i < paths.size(); i++) {
-//            tables.add(new HashMap<IpPrefix, Double>());
-//        }
-//
-//        int precision = 32 - prefix.prefixLength();
-//        long power = precision;
-//
-//        double fraction_weight = Math.pow(2.0, precision);
-//        long new_total = (long) fraction_weight;
-//
-//        //Normalize the Weights for each of the paths with this new pow of 2
-//        //index 0 is the path the weight is for when we sort the array
-//        //index 1 is the curr_load for the path
-//        long[][] normalized_weights = new long[paths.size()][2];
-//        long curr_new_total = new_total;
-//        int weight_index = 0;
-//        // @sanjay_prefix This loop will potentially need to change as well, see comments below.
-//        for (final JsonNode pathobj : paths) {
-//            double fraction = pathobj.get("fraction").asDouble();
-//            long weighted = (long) (fraction * fraction_weight);
-//            if (weight_index == (paths.size() - 1)) {
-//                normalized_weights[weight_index][0] = weight_index;
-//                normalized_weights[weight_index][1] = curr_new_total;
-//            } else {
-//                normalized_weights[weight_index][0] = weight_index;
-//                normalized_weights[weight_index][1] = weighted;
-//                curr_new_total -= weighted;
-//            }
-//            weight_index += 1;
-//        }
-//
-//        boolean has_non_zero = true;
-//
-//        //keep creating prefix rules, along with fractions for largest load
-//        long cumulative_load = 0;
-//        while (has_non_zero) {
-//            long[][] sorted_weights = sort_weights(normalized_weights);
-//            int i = 0; //always create a rule for the max load after sorting
-//            long curr_load = sorted_weights[i][1];
-//
-//            if (curr_load == 0) {
-//                has_non_zero = false;
-//                continue;
-//            }
-//
-//            long highest_power_two = (long)
-//                    (Math.log(curr_load) / Math.log(2.0));
-//
-//            String binary = Integer.toBinaryString((int) cumulative_load);
-//
-//            //take the rightmost 'power' bits
-//            String proper_binary = "";
-//            if (power > binary.length()) {
-//                for (int k = 0; k < power - binary.length(); k++) {
-//                    proper_binary += "0";
-//                }
-//                proper_binary += binary;
-//            } else {
-//                proper_binary = binary.substring(binary.length() - (int) power, binary.length());
-//            }
-//
-//            //add the first ('power' - 'highest_power_two') bits to the prefix
-//            String prefix_add_bits =
-//                    proper_binary.substring(0, (int) (power - highest_power_two));
-//            Double prefix_fraction =
-//                    new Double(Math.pow(2.0, highest_power_two) / (new_total * 1.0));
-//
-//            String extra_bits = prefix_add_bits;
-//            IpPrefix curr_prefix = prefix;
-//            int curr_prefix_len = curr_prefix.prefixLength();
-//            int shift = 31 - curr_prefix_len;
-//            Ip4Address curr_ip =
-//                    curr_prefix.address().getIp4Address();
-//            int curr_ip_int = curr_ip.toInt();
-//            int curr_mask = 0;
-//            for (int ind = 0; ind < extra_bits.length(); ind++) {
-//                String curr_char =
-//                        extra_bits.substring(ind, ind + 1);
-//                int curr_bit =
-//                        Integer.valueOf(curr_char).intValue();
-//                curr_mask =
-//                        curr_mask | (curr_bit << (shift - ind));
-//            }
-//            int new_ip_int = curr_ip_int | curr_mask;
-//            IpAddress new_ip = IpAddress.valueOf(new_ip_int);
-//            int new_prefix_len =
-//                    curr_prefix_len + extra_bits.length();
-//            IpPrefix new_prefix =
-//                    IpPrefix.valueOf(new_ip, new_prefix_len);
-//
-//            tables.get((int) sorted_weights[i][0]).put(new_prefix, prefix_fraction);
-//
-//            normalized_weights[(int) (sorted_weights[i][0])][1] -= (long) Math.pow(2.0, highest_power_two);
-//            cumulative_load += (int) Math.pow(2.0, highest_power_two);
-//        }
-//
-//        return tables;
-//    }
-//
-//    private Collection<PathIntent> computeIntents(JsonNode all_paths) {
-//        assert all_paths.isArray();
-//
-//        ArrayList<PathIntent> result = new ArrayList<PathIntent>();
-//
-//        for (final JsonNode tcjson : all_paths) {
-//            // Extract the traffic class
-//            int tcid = tcjson.get("tcid").asInt();
-//            TrafficClass tc = allTrafficClasses.get(tcid);
-//            TrafficSelector original_selector = tc.getSelector();
-//
-//            JsonNode paths = tcjson.get("paths");
-//            assert paths.isArray();
-//
-//            //@victor is this correct? how do we add the tcid to the intent we are adding? What should first arg me, "of", "snmp"?
-//            ProviderId provider_id = new ProviderId("of", Integer.toString(tcid));
-//
-//            if (paths.size() == 1) {
-//                PathIntent.Builder intent_builder = PathIntent.builder();
-//                DefaultPath curr_path =
-//                        new DefaultPath(provider_id, create_links(paths.get(0)), 1.0, null);
-//                intent_builder.path(curr_path);
-//                intent_builder.selector(original_selector);
-//
-//                PathIntent path_intent = intent_builder.build();
-//                result.add(path_intent);
-//                continue;
-//            }
-//            IpPrefix prefix = ((IPCriterion) original_selector.getCriterion(Criterion.Type.IPV4_SRC)).ip();
-//
-//            List<Map<IpPrefix, Double>> tables = create_fractions(prefix, paths);
-//
-//            int path_index = -1;
-//            for (final JsonNode pathobj : paths) {
-//                path_index++;
-//
-//                // Get the path nodes
-//                JsonNode pathnodes = pathobj.get("nodes");
-//
-//                List<Link> link_list = create_links(pathnodes);
-//
-//                Set<Criterion> original_criteria = original_selector.criteria();
-//
-//                Map<IpPrefix, Double> curr_table = tables.get(path_index);
-//                //Loop through each wildcard rule we have for this path
-//                for (IpPrefix new_prefix : curr_table.keySet()) {
-//                    TrafficSelector.Builder ts_builder =
-//                            DefaultTrafficSelector.builder();
-//                    for (Criterion curr_criteria : original_criteria) {
-//                        if (curr_criteria.type() != Criterion.Type.IPV4_SRC) {
-//                            ts_builder.add(curr_criteria);
-//                        } else {
-//                            ts_builder.add(Criteria.matchIPSrc(new_prefix));
-//                        }
-//                    }
-//
-//                    TrafficSelector new_selector = ts_builder.build();
-//
-//                    PathIntent.Builder intent_builder = PathIntent.builder();
-//                    DefaultPath curr_path =
-//                            new DefaultPath(provider_id, link_list,
-//                                    tables.get(path_index).get(new_prefix), null);
-//                    intent_builder.path(curr_path);
-//                    intent_builder.selector(new_selector);
-//
-//                    PathIntent path_intent = intent_builder.build();
-//                    result.add(path_intent);
-//                }
-//            }
-//        }
-//        return result;
-//    }
+                DeviceId prev_dev = linkMap.get(prev_id);
+                DeviceId next_dev = linkMap.get(curr_id);
 
+                ConnectPoint src_connect_point = null;
+                ConnectPoint dst_connect_point = null;
+
+                Set<Link> src_egress =
+                        linkService.getDeviceEgressLinks(prev_dev);
+
+                for (Link curr_link : src_egress) {
+                    ConnectPoint curr_connect_point = curr_link.dst();
+                    DeviceId curr_dev = curr_connect_point.deviceId();
+                    if (curr_dev.equals(next_dev)) {
+                        dst_connect_point = curr_connect_point;
+                        src_connect_point = curr_link.src();
+                    }
+                }
+
+                link_builder.src(src_connect_point);
+                link_builder.dst(dst_connect_point);
+		DefaultLink link = link_builder.build();
+                link_list.add((Link) link);
+                prev_node = node;
+            }
+        }
+        return link_list;
+    }
+
+    private List<Map<IpPrefix, Double>> create_fractions(IpPrefix prefix, JSONArray paths) {
+	
+        List<Map<IpPrefix, Double>> tables = new ArrayList<Map<IpPrefix, Double>>();
+	
+        for (int i = 0; i < paths.length(); i++) {
+            tables.add(new HashMap<IpPrefix, Double>());
+        }
+	
+        int precision = 32 - prefix.prefixLength();
+        long power = precision;
+	
+        double fraction_weight = Math.pow(2.0, precision);
+        long new_total = (long) fraction_weight;
+	
+	//Normalize the Weights for each of the paths with this new pow of 2
+        //index 0 is the path the weight is for when we sort the array
+        //index 1 is the curr_load for the path
+        long[][] normalized_weights = new long[paths.length()][2];
+        long curr_new_total = new_total;
+        int weight_index = 0;
+        for (int i = 0; i < paths.length(); i++) {
+	    JSONObject pathobj = paths.getJSONObject(i);
+            double fraction = pathobj.getDouble("fraction");
+            long weighted = (long) (fraction * fraction_weight);
+            if (weight_index == (paths.length() - 1)) {
+                normalized_weights[weight_index][0] = weight_index;
+                normalized_weights[weight_index][1] = curr_new_total;
+            } else {
+                normalized_weights[weight_index][0] = weight_index;
+                normalized_weights[weight_index][1] = weighted;
+                curr_new_total -= weighted;
+            }
+            weight_index += 1;
+        }
+
+        boolean has_non_zero = true;
+
+        //keep creating prefix rules, along with fractions for largest load
+        long cumulative_load = 0;
+        while (has_non_zero) {
+            long[][] sorted_weights = sort_weights(normalized_weights);
+            int i = 0; //always create a rule for the max load after sorting
+            long curr_load = sorted_weights[i][1];
+
+            if (curr_load == 0) {
+                has_non_zero = false;
+                continue;
+            }
+
+            long highest_power_two = (long)
+                    (Math.log(curr_load) / Math.log(2.0));
+
+            String binary = Integer.toBinaryString((int) cumulative_load);
+
+            //take the rightmost 'power' bits
+            String proper_binary = "";
+            if (power > binary.length()) {
+                for (int k = 0; k < power - binary.length(); k++) {
+                    proper_binary += "0";
+                }
+                proper_binary += binary;
+            } else {
+                proper_binary = binary.substring(binary.length() - (int) power, binary.length());
+            }
+
+            //add the first ('power' - 'highest_power_two') bits to the prefix
+	    String prefix_add_bits =
+		proper_binary.substring(0, (int) (power - highest_power_two));
+            Double prefix_fraction =
+		new Double(Math.pow(2.0, highest_power_two) / (new_total * 1.0));
+
+            String extra_bits = prefix_add_bits;
+            IpPrefix curr_prefix = prefix;
+            int curr_prefix_len = curr_prefix.prefixLength();
+            int shift = 31 - curr_prefix_len;
+            Ip4Address curr_ip =
+                    curr_prefix.address().getIp4Address();
+            int curr_ip_int = curr_ip.toInt();
+            int curr_mask = 0;
+            for (int ind = 0; ind < extra_bits.length(); ind++) {
+                String curr_char =
+                        extra_bits.substring(ind, ind + 1);
+                int curr_bit =
+                        Integer.valueOf(curr_char).intValue();
+                curr_mask =
+                        curr_mask | (curr_bit << (shift - ind));
+            }
+            int new_ip_int = curr_ip_int | curr_mask;
+            IpAddress new_ip = IpAddress.valueOf(new_ip_int);
+            int new_prefix_len =
+                    curr_prefix_len + extra_bits.length();
+            IpPrefix new_prefix =
+                    IpPrefix.valueOf(new_ip, new_prefix_len);
+
+            tables.get((int) sorted_weights[i][0]).put(new_prefix, prefix_fraction);
+
+            normalized_weights[(int) (sorted_weights[i][0])][1] -= (long) Math.pow(2.0, highest_power_two);
+            cumulative_load += (int) Math.pow(2.0, highest_power_two);
+        }
+
+        return tables;
+    }
+
+    private Collection<PathIntent> computeIntents(JSONArray all_paths) {
+
+        ArrayList<PathIntent> result = new ArrayList<PathIntent>();
+
+        for (int i = 0; i < all_paths.length(); i++) {
+	    JSONObject tcjson = all_paths.getJSONObject(i);
+	    
+            // Extract the traffic class
+            int tcid = tcjson.getInt("tcid");
+            TrafficClass tc = allTrafficClasses.get(tcid);
+            TrafficSelector original_selector = tc.getSelector();
+
+            JSONArray paths = tcjson.getJSONArray("paths");
+	    
+            //@victor is this correct? how do we add the tcid to the intent we are adding? What should first arg me, "of", "snmp"?
+            ProviderId provider_id = new ProviderId("of", Integer.toString(tcid));
+	    
+            if (paths.length() == 1) {
+                PathIntent.Builder intent_builder = PathIntent.builder();
+		JSONObject pathobj = paths.getJSONObject(0);
+		JSONArray pathnodes = pathobj.getJSONArray("nodes");
+                DefaultPath curr_path =
+                        new DefaultPath(provider_id, create_links(pathnodes), 1.0, null);
+                intent_builder.path(curr_path);
+                intent_builder.selector(original_selector);
+
+                PathIntent path_intent = intent_builder.build();
+                result.add(path_intent);
+                continue;
+            }
+            IpPrefix prefix = ((IPCriterion) original_selector.getCriterion(Criterion.Type.IPV4_SRC)).ip();
+
+            List<Map<IpPrefix, Double>> tables = create_fractions(prefix, paths);
+
+            int path_index = -1;
+            for (int j = 0; j < paths.length(); j++) {
+		JSONObject pathobj = paths.getJSONObject(j);
+                path_index++;
+
+                // Get the path nodes
+                JSONArray pathnodes = pathobj.getJSONArray("nodes");
+
+                List<Link> link_list = create_links(pathnodes);
+
+                Set<Criterion> original_criteria = original_selector.criteria();
+
+                Map<IpPrefix, Double> curr_table = tables.get(path_index);
+                // Loop through each wildcard rule we have for this path
+                for (IpPrefix new_prefix : curr_table.keySet()) {
+                    TrafficSelector.Builder ts_builder =
+                            DefaultTrafficSelector.builder();
+                    for (Criterion curr_criteria : original_criteria) {
+                        if (curr_criteria.type() != Criterion.Type.IPV4_SRC) {
+                            ts_builder.add(curr_criteria);
+                        } else {
+                            ts_builder.add(Criteria.matchIPSrc(new_prefix));
+                        }
+                    }
+
+                    TrafficSelector new_selector = ts_builder.build();
+
+                    PathIntent.Builder intent_builder = PathIntent.builder();
+                    DefaultPath curr_path =
+                            new DefaultPath(provider_id, link_list,
+                                    tables.get(path_index).get(new_prefix), null);
+                    intent_builder.path(curr_path);
+                    intent_builder.selector(new_selector);
+                    PathIntent path_intent = intent_builder.build();
+                    result.add(path_intent);
+                }
+            }
+        }
+        return result;
+    }
+    
 
     /**
      * Get the integer id assigned to an ONOS DeviceID
