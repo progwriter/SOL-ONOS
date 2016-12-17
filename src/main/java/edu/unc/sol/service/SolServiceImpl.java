@@ -132,6 +132,7 @@ public class SolServiceImpl implements SolService {
             log.warn("No SOL server configured, using default values");
             solServer = "127.0.0.1:5000";
         }
+	
         // Build a proper url for the rest client
         StringBuilder builder = new StringBuilder();
         remoteURL = builder.append("http://").append(solServer).append("/api/v1/").toString();
@@ -198,7 +199,8 @@ public class SolServiceImpl implements SolService {
         for (Edge e : topology_edges) {
             // Note: by default ONOS graphs (and thus edges) are directed.
             JSONObject link = new JSONObject();
-
+	    links.put(link);
+	    
             int srcid = getIntegerID(((DefaultTopologyVertex) e.src()).deviceId());
             int dstid = getIntegerID(((DefaultTopologyVertex) e.dst()).deviceId());
             link.put("source", srcid);
@@ -211,6 +213,16 @@ public class SolServiceImpl implements SolService {
             long src_bandwith_mbps = src_port.portSpeed();
             resources.put("bw", src_bandwith_mbps);
         }
+
+	try {
+	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:5000").body(topoj).asJson();
+	    log.info("Successfully POSTed topology");
+	} catch (UnirestException e) {
+	    e.printStackTrace();
+	}
+	
+	
+	/*	
         // Send request to the specified URL as a HTTP POST request.
         HttpResponse resp = null;
         try {
@@ -223,6 +235,7 @@ public class SolServiceImpl implements SolService {
         } else {
             log.info("Successfully POSTed the topology");
         }
+	*/
     }
 
     @Deactivate
@@ -263,6 +276,14 @@ public class SolServiceImpl implements SolService {
                 allTrafficClasses.add(tc);
             }
         }
+
+	try {
+	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:5000").body(composeObject).asJson();
+	    log.info("Successfully POSTed the composition");
+	} catch (UnirestException e) {
+	    e.printStackTrace();
+	}
+	/*
         // Send the composition request over:
 	HttpResponse resp = null;
         try {
@@ -275,7 +296,8 @@ public class SolServiceImpl implements SolService {
         } else {
             log.info("Composition POST succesful");
         }
-        processComposeResponse(resp);
+	processComposeResponse(resp);
+	*/
     }
 
     private void processComposeResponse(HttpResponse resp) {
