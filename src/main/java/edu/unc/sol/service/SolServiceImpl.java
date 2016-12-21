@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.locks.*;
 
 import static edu.unc.sol.service.Fairness.PROP_FAIR;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
@@ -61,22 +62,61 @@ public class SolServiceImpl implements SolService {
     private HashMap<ApplicationId, Optimization> optimizations;
     private String remoteURL;
     private List<TrafficClass> allTrafficClasses;
+    private Lock tcMap_lock = new ReentrantLock();
+    private Condition tcMap_cond = tcMap_lock.newCondition();
+    private boolean available = false;
 
+    public void tcMap_wait() {
+	tcMap_lock.lock();
+	try {
+	    while (available == false) {
+		try {
+		    tcMap_cond.await();
+		} catch (InterruptedException e) { }
+	    }
+	    available = false;
+	    tcMap_cond.signalAll();
+	} finally {
+	    tcMap_lock.unlock();
+	}	
+    }
+
+    public void tcMap_put(ApplicationId id, List<TrafficClass> trafficClasses) {
+	tcMap_lock.lock();
+	try {
+	    while (available == true) {
+		try {
+		    tcMap_cond.await();
+		} catch (InterruptedException e) {
+		    log.error("Failed to cond_wait");
+		}
+	    }
+	    available = true;
+	    tcMap_put(id, trafficClasses);
+	    tcMap_cond.signalAll();
+	} finally {
+	    tcMap_lock.unlock();
+	}
+    }
+    
     private class SolutionCalculator implements Runnable {
         @Override
         public void run() {
             log.debug("Recompute thread started");
-//            while (running) {
-            // TODO: monitor changes to the traffic classes
-            // Upon change, trigger recompute
-//                recompute();
-            // TODO: results of recompute should be sent to the apps
-            // using the PathUpdateListener object
-//            }
+            while (running) {
+		// TODO: monitor changes to the traffic classes
+		// Upon change, trigger recompute
+                recompute();
+		// TODO: results of recompute should be sent to the apps
+		// using the PathUpdateListener object
+
+		//wait until tcMap is modified again
+		tcMap_wait();
+            }
             log.debug("Recompute thread ending");
         }
     }
-
+	
     public SolServiceImpl() {
         // Initialize basic structures
         tcMap = new HashMap<>();
@@ -89,15 +129,15 @@ public class SolServiceImpl implements SolService {
     @Override
     public void registerApp(ApplicationId id, List<TrafficClass> trafficClasses, Optimization opt,
                             PathUpdateListener listener) {
-        tcMap.put(id, trafficClasses);
         listenerMap.put(id, new LinkedList<>());
         listenerMap.get(id).add(listener);
         optimizations.put(id, opt);
+	tcMap_put(id, trafficClasses);
     }
 
     @Override
     public void updateTrafficClasses(ApplicationId id, List<TrafficClass> trafficClasses) {
-        tcMap.put(id, trafficClasses);
+        tcMap_put(id, trafficClasses);
     }
 
     @Override
@@ -214,14 +254,13 @@ public class SolServiceImpl implements SolService {
             resources.put("bw", src_bandwith_mbps);
         }
 
+	//POSTing to a dummy server, uncomment to post to SOL server
 	try {
 	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:5000").body(topoj).asJson();
 	    log.info("Successfully POSTed topology");
 	} catch (UnirestException e) {
 	    e.printStackTrace();
-	}
-	
-	
+	}	
 	/*	
         // Send request to the specified URL as a HTTP POST request.
         HttpResponse resp = null;
@@ -277,6 +316,7 @@ public class SolServiceImpl implements SolService {
             }
         }
 
+	//POSTing to a dummy server, uncomment to post to SOL server
 	try {
 	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:5000").body(composeObject).asJson();
 	    log.info("Successfully POSTed the composition");
