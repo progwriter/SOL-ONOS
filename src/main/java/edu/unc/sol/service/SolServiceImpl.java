@@ -106,7 +106,7 @@ public class SolServiceImpl implements SolService {
             while (running) {
 		// TODO: monitor changes to the traffic classes
 		// Upon change, trigger recompute
-                recompute();
+		recompute();
 		// TODO: results of recompute should be sent to the apps
 		// using the PathUpdateListener object
 
@@ -124,6 +124,7 @@ public class SolServiceImpl implements SolService {
         running = false;
         deviceMap = new HashMap<>();
         linkMap = new HashMap<>();
+	optimizations = new HashMap<>();
     }
 
     @Override
@@ -176,11 +177,14 @@ public class SolServiceImpl implements SolService {
         // Build a proper url for the rest client
         StringBuilder builder = new StringBuilder();
         remoteURL = builder.append("http://").append(solServer).append("/api/v1/").toString();
+
+	log.info("The SOL Server is configured at: " + remoteURL);
         // Send the topology to the SOL server
 	//@victor should this be URL + "/topology"? -sanjay
         sendTopology(remoteURL + "/topology");
         // Start the monitor-solve loop in a new thread
-        new Thread(new SolutionCalculator()).run();
+	log.info("Going to start new SolutionCalculator Thread");
+        new Thread(new SolutionCalculator()).start();
         log.info("Started the SOL service");
     }
 
@@ -207,10 +211,8 @@ public class SolServiceImpl implements SolService {
         // Make sure the graph is directed
         topoj.put("graph", new JSONObject().put("directed", true));
         // Create holders for nodes and link
-        JSONArray nodes = new JSONArray();
-        topoj.put("nodes", new JSONObject().put("items", nodes));
-        JSONArray links = new JSONArray();
-        topoj.put("links", new JSONObject().put("items", links));
+	//        JSONArray nodes = new JSONArray();
+	//       JSONArray links = new JSONArray();
         // Extract nodes and links from the ONOS topology
         Set<TopologyVertex> topology_vertexes = topo.getVertexes();
         Set<TopologyEdge> topology_edges = topo.getEdges();
@@ -224,7 +226,7 @@ public class SolServiceImpl implements SolService {
             deviceMap.put(dev, vertex_index);
             linkMap.put(vertex_index, dev);
             JSONObject node = new JSONObject();
-            nodes.put(node);
+	    //           nodes.put(node);
             node.put("id", getIntegerID(dev));
             // Devices in ONOS are by default switches (hosts are a separate category),
             // which is EXACTLY what we need
@@ -239,7 +241,7 @@ public class SolServiceImpl implements SolService {
         for (Edge e : topology_edges) {
             // Note: by default ONOS graphs (and thus edges) are directed.
             JSONObject link = new JSONObject();
-	    links.put(link);
+	    //	    links.put(link);
 	    
             int srcid = getIntegerID(((DefaultTopologyVertex) e.src()).deviceId());
             int dstid = getIntegerID(((DefaultTopologyVertex) e.dst()).deviceId());
@@ -253,28 +255,32 @@ public class SolServiceImpl implements SolService {
             long src_bandwith_mbps = src_port.portSpeed();
             resources.put("bw", src_bandwith_mbps);
         }
+	//        topoj.put("nodes", new JSONObject().put("items", nodes));
+	//        topoj.put("links", new JSONObject().put("items", links));
 
+	
 	//POSTing to a dummy server, uncomment to post to SOL server
 	try {
-	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:5000").body(topoj).asJson();
-	    log.info("Successfully POSTed topology");
+	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:7500").body(topoj).asJson();
+	    log.info("Successfully POSTed topology to dummy server");
 	} catch (UnirestException e) {
 	    e.printStackTrace();
-	}	
-	/*	
+	}
+	
+	/*		
         // Send request to the specified URL as a HTTP POST request.
         HttpResponse resp = null;
         try {
             resp = Unirest.post(url).body(topoj).asJson();
+	    if (resp.getStatus() != 200) {
+		log.error(resp.getStatusText());
+	    } else {
+		log.info("Successfully POSTed the topology to SOL server");
+	    }
         } catch (UnirestException e) {
-            log.error("Failed to post topology", e);
+            log.error("Failed to post topology to SOL server", e);
         }
-        if (resp.getStatus() != 200) {
-            log.error(resp.getStatusText());
-        } else {
-            log.info("Successfully POSTed the topology");
-        }
-	*/
+	*/	
     }
 
     @Deactivate
@@ -283,7 +289,7 @@ public class SolServiceImpl implements SolService {
         Unirest.shutdown();
         log.info("Stopped the SOL service");
     }
-
+    
     /**
      * Compute a new solution from all of the registered apps.
      */
@@ -318,26 +324,28 @@ public class SolServiceImpl implements SolService {
 
 	//POSTing to a dummy server, uncomment to post to SOL server
 	try {
-	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:5000").body(composeObject).asJson();
-	    log.info("Successfully POSTed the composition");
+	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:7500").body(composeObject).asJson();
+	    log.info("Successfully POSTed the composition to the dummy server");
 	} catch (UnirestException e) {
 	    e.printStackTrace();
 	}
+
+
 	/*
         // Send the composition request over:
 	HttpResponse resp = null;
         try {
             resp = Unirest.post(remoteURL + "/compose").body(composeObject).asJson();
+	    if (resp.getStatus() != 200) {
+		log.error("Composition request failed!");
+	    } else {
+		log.info("Composition POST succesful to SOL server");
+	    }
+	    processComposeResponse(resp);
         } catch (UnirestException e) {
-            log.error("Failed to post composition", e);
+            log.error("Failed to post composition to the SOL server", e);
         }
-        if (resp.getStatus() != 200) {
-            log.error("Composition request failed!");
-        } else {
-            log.info("Composition POST succesful");
-        }
-	processComposeResponse(resp);
-	*/
+	*/	
     }
 
     private void processComposeResponse(HttpResponse resp) {
