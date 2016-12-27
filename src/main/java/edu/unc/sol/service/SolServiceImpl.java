@@ -274,7 +274,7 @@ public class SolServiceImpl implements SolService {
                     .body(new JsonNode(topoj.toString()))
                     .asString();
             if (resp.getStatus() != 200) {
-                log.error(resp.getStatusText());
+		log.error(resp.getStatus() + ": " + resp.getStatusText());
             } else {
                 log.info("Successfully POSTed the topology to SOL server");
             }
@@ -339,12 +339,12 @@ public class SolServiceImpl implements SolService {
 		.body(new JsonNode(composeObject.toString()))
 		.asString();
 	    if (resp.getStatus() != 200) {
-		log.error(resp.getStatusText());
+		log.error(resp.getStatus() + ": " + resp.getStatusText());
 	    } else {
-		log.info("Successfully POSTed the topology to SOL server");
+		log.info("Successfully POSTed the composition to SOL server");
 	    }
 	} catch (UnirestException e) {
-	    log.error("Failed to post topology to SOL server", e);
+	    log.error("Failed to post composition to SOL server", e);
 	}	
     }
 
