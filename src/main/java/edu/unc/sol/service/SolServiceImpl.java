@@ -331,21 +331,21 @@ public class SolServiceImpl implements SolService {
 //	}
 
 
-	/*
-        // Send the composition request over:
+        // Send request to the specified URL as a HTTP POST request.
 	HttpResponse resp = null;
-        try {
-            resp = Unirest.post(remoteURL + "/compose").body(composeObject).asJson();
+	try {
+	    resp = Unirest.post(remoteURL + "compose/")
+		.header(HTTP.CONTENT_TYPE, "application/json")
+		.body(new JsonNode(composeObject.toString()))
+		.asString();
 	    if (resp.getStatus() != 200) {
-		log.error("Composition request failed!");
+		log.error(resp.getStatusText());
 	    } else {
-		log.info("Composition POST succesful to SOL server");
+		log.info("Successfully POSTed the topology to SOL server");
 	    }
-	    processComposeResponse(resp);
-        } catch (UnirestException e) {
-            log.error("Failed to post composition to the SOL server", e);
-        }
-	*/	
+	} catch (UnirestException e) {
+	    log.error("Failed to post topology to SOL server", e);
+	}	
     }
 
     private void processComposeResponse(HttpResponse resp) {
@@ -353,7 +353,7 @@ public class SolServiceImpl implements SolService {
         // TODO: I hope arrays as top-level elements are allowed, check this @victor
 
 	//@victor will this properly get the response entity? -sanjay
-        JSONArray data = (JSONArray) resp.getBody();
+        JSONArray data = new JSONArray(resp.getBody().toString());
         JSONObject app_paths;
 	for (int i = 0; i < data.length(); i++) {
             app_paths = data.getJSONObject(i);
