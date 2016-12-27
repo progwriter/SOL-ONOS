@@ -353,7 +353,7 @@ public class SolServiceImpl implements SolService {
         // TODO: I hope arrays as top-level elements are allowed, check this @victor
 
 	//@victor will this properly get the response entity? -sanjay
-        JSONArray data = (JSONArray) resp.getBody();
+        JSONArray data = new JSONArray(resp.getBody().toString());
         JSONObject app_paths;
 	for (int i = 0; i < data.length(); i++) {
             app_paths = data.getJSONObject(i);
