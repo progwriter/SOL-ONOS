@@ -9,6 +9,7 @@ import edu.unc.sol.app.PathUpdateListener;
 import edu.unc.sol.app.TrafficClass;
 import edu.unc.sol.util.Config;
 import org.apache.felix.scr.annotations.*;
+import org.apache.http.protocol.HTTP;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.onlab.graph.Edge;
@@ -177,13 +178,11 @@ public class SolServiceImpl implements SolService {
         // Build a proper url for the rest client
         StringBuilder builder = new StringBuilder();
         remoteURL = builder.append("http://").append(solServer).append("/api/v1/").toString();
-
-	log.info("The SOL Server is configured at: " + remoteURL);
+        log.info("The SOL Server is configured at: " + remoteURL);
         // Send the topology to the SOL server
-	//@victor should this be URL + "/topology"? -sanjay
-        sendTopology(remoteURL + "/topology");
+        sendTopology(remoteURL + "topology/");
         // Start the monitor-solve loop in a new thread
-	log.info("Going to start new SolutionCalculator Thread");
+        log.info("Going to start new SolutionCalculator Thread");
         new Thread(new SolutionCalculator()).start();
         log.info("Started the SOL service");
     }
@@ -211,8 +210,8 @@ public class SolServiceImpl implements SolService {
         // Make sure the graph is directed
         topoj.put("graph", new JSONObject().put("directed", true));
         // Create holders for nodes and link
-	//        JSONArray nodes = new JSONArray();
-	//       JSONArray links = new JSONArray();
+        JSONArray nodes = new JSONArray();
+        JSONArray links = new JSONArray();
         // Extract nodes and links from the ONOS topology
         Set<TopologyVertex> topology_vertexes = topo.getVertexes();
         Set<TopologyEdge> topology_edges = topo.getEdges();
@@ -226,7 +225,7 @@ public class SolServiceImpl implements SolService {
             deviceMap.put(dev, vertex_index);
             linkMap.put(vertex_index, dev);
             JSONObject node = new JSONObject();
-	    //           nodes.put(node);
+            nodes.put(node);
             node.put("id", getIntegerID(dev));
             // Devices in ONOS are by default switches (hosts are a separate category),
             // which is EXACTLY what we need
@@ -241,7 +240,7 @@ public class SolServiceImpl implements SolService {
         for (Edge e : topology_edges) {
             // Note: by default ONOS graphs (and thus edges) are directed.
             JSONObject link = new JSONObject();
-	    //	    links.put(link);
+            links.put(link);
 	    
             int srcid = getIntegerID(((DefaultTopologyVertex) e.src()).deviceId());
             int dstid = getIntegerID(((DefaultTopologyVertex) e.dst()).deviceId());
@@ -255,32 +254,33 @@ public class SolServiceImpl implements SolService {
             long src_bandwith_mbps = src_port.portSpeed();
             resources.put("bw", src_bandwith_mbps);
         }
-	//        topoj.put("nodes", new JSONObject().put("items", nodes));
-	//        topoj.put("links", new JSONObject().put("items", links));
+        topoj.put("nodes", nodes);
+        topoj.put("links", links);
 
 	
 	//POSTing to a dummy server, uncomment to post to SOL server
-	try {
-	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:7500").body(topoj).asJson();
-	    log.info("Successfully POSTed topology to dummy server");
-	} catch (UnirestException e) {
-	    e.printStackTrace();
-	}
+//	try {
+//	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:7500").body(topoj).asJson();
+//	    log.info("Successfully POSTed topology to dummy server");
+//	} catch (UnirestException e) {
+//	    e.printStackTrace();
+//	}
 	
-	/*		
         // Send request to the specified URL as a HTTP POST request.
         HttpResponse resp = null;
         try {
-            resp = Unirest.post(url).body(topoj).asJson();
-	    if (resp.getStatus() != 200) {
-		log.error(resp.getStatusText());
-	    } else {
-		log.info("Successfully POSTed the topology to SOL server");
-	    }
+            resp = Unirest.post(url)
+                    .header(HTTP.CONTENT_TYPE, "application/json")
+                    .body(new JsonNode(topoj.toString()))
+                    .asString();
+            if (resp.getStatus() != 200) {
+                log.error(resp.getStatusText());
+            } else {
+                log.info("Successfully POSTed the topology to SOL server");
+            }
         } catch (UnirestException e) {
             log.error("Failed to post topology to SOL server", e);
         }
-	*/	
     }
 
     @Deactivate
@@ -323,12 +323,12 @@ public class SolServiceImpl implements SolService {
         }
 
 	//POSTing to a dummy server, uncomment to post to SOL server
-	try {
-	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:7500").body(composeObject).asJson();
-	    log.info("Successfully POSTed the composition to the dummy server");
-	} catch (UnirestException e) {
-	    e.printStackTrace();
-	}
+//	try {
+//	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:7500").body(composeObject).asJson();
+//	    log.info("Successfully POSTed the composition to the dummy server");
+//	} catch (UnirestException e) {
+//	    e.printStackTrace();
+//	}
 
 
 	/*
