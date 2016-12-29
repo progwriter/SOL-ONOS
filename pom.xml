@@ -95,7 +95,7 @@
                         <Embed-Dependency>
                             unirest-java;inline=true,
                         </Embed-Dependency>
-                        <Export-Package>com.mashape.*</Export-Package>
+                        <Export-Package>com.mashape.*, edu.unc.*</Export-Package>
                     </instructions>
                 </configuration>
             </plugin>
