@@ -334,7 +334,7 @@ public class SolServiceImpl implements SolService {
         // Send request to the specified URL as a HTTP POST request.
 	HttpResponse resp = null;
 	try {
-	    resp = Unirest.post(remoteURL + "compose/")
+	    resp = Unirest.post(remoteURL + "compose")
 		.header(HTTP.CONTENT_TYPE, "application/json")
 		.body(new JsonNode(composeObject.toString()))
 		.asString();
