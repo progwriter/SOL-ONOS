@@ -84,20 +84,10 @@ public class SolServiceImpl implements SolService {
 
     public void tcMap_put(ApplicationId id, List<TrafficClass> trafficClasses) {
 	tcMap_lock.lock();
-	try {
-	    while (available == true) {
-		try {
-		    tcMap_cond.await();
-		} catch (InterruptedException e) {
-		    log.error("Failed to cond_wait");
-		}
-	    }
-	    available = true;
-	    tcMap_put(id, trafficClasses);
-	    tcMap_cond.signalAll();
-	} finally {
-	    tcMap_lock.unlock();
-	}
+	available = true;
+	tcMap_put(id, trafficClasses);
+	tcMap_cond.signalAll();
+	tcMap_lock.unlock();
     }
     
     private class SolutionCalculator implements Runnable {
@@ -616,6 +606,15 @@ public class SolServiceImpl implements SolService {
                 }
             }
         }
+
+	//printing path intents
+	log.info("Printing Path Intents as Sanity Check");
+	int count = 0;
+	for (PathIntent curr : result) {
+	    log.info("Intent " + count + ": " + curr.toString());
+	    count++;
+	}
+	log.info("Finished Printing Intents");
         return result;
     }
     
