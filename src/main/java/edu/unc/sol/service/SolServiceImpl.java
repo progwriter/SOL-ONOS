@@ -85,7 +85,14 @@ public class SolServiceImpl implements SolService {
     public void tcMap_put(ApplicationId id, List<TrafficClass> trafficClasses) {
 	tcMap_lock.lock();
 	available = true;
-	tcMap_put(id, trafficClasses);
+	log.info("Putting into TCMAP- ID: " + id.toString());
+	log.info("Putting into TCMAP- LIST: ");
+	int count = 0;
+	for (TrafficClass curr : trafficClasses) {
+	    log.info("Index " + count + ": " + curr.toString());
+	}
+	log.info("END TrafficClasses LIST");
+	tcMap.put(id, trafficClasses);
 	tcMap_cond.signalAll();
 	tcMap_lock.unlock();
     }
@@ -305,6 +312,7 @@ public class SolServiceImpl implements SolService {
 	    }
 	    JSONArray tc_list = new JSONArray();
 	    app.put("traffic_classes", new JSONObject().put("items", tc_list));
+	    //tcMap.get(appid) is NULL??
             for (TrafficClass tc : tcMap.get(appid)) {
 		tc_list.put(tc.toJSONnode(tc_counter++));
                 // Keep track of all traffic classes so we can decode the response
@@ -626,7 +634,14 @@ public class SolServiceImpl implements SolService {
      */
     public int getIntegerID(DeviceId id) {
         // Grab the id from the device mapping
-        return deviceMap.get(id).intValue();
+	Integer int_id = deviceMap.get(id);
+	if (int_id == null) {
+	    log.error("ID not found int deviceMap: " + id.toString());
+	    return -1;
+	}
+	else {
+	    return deviceMap.get(id).intValue();
+	}
     }
 }
     
