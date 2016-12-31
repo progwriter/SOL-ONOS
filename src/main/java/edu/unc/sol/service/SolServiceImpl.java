@@ -123,6 +123,7 @@ public class SolServiceImpl implements SolService {
         deviceMap = new HashMap<>();
         linkMap = new HashMap<>();
 	optimizations = new HashMap<>();
+	allTrafficClasses = new ArrayList<>();
     }
 
     @Override
