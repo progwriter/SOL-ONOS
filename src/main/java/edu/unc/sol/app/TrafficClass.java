@@ -1,6 +1,7 @@
 package edu.unc.sol.app;
 
 import edu.unc.sol.service.SolService;
+import edu.unc.sol.service.SolServiceImpl;
 import org.apache.felix.scr.annotations.Reference;
 import org.apache.felix.scr.annotations.ReferenceCardinality;
 import org.onlab.packet.IpPrefix;
@@ -21,8 +22,8 @@ public class TrafficClass {
     protected DeviceId src;
     protected DeviceId dst;
 
-    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
-    private static SolService solService;
+    //    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    private static SolService solService = new SolServiceImpl();
 
     /**
      * Create a new traffic class
