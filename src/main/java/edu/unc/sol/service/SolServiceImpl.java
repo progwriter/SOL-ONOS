@@ -40,9 +40,9 @@ import java.util.concurrent.locks.*;
 import static edu.unc.sol.service.Fairness.PROP_FAIR;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
 
-@Service
 @Component(immediate = true)
-public class SolServiceImpl implements SolService {
+//@Service
+public final class SolServiceImpl implements SolService {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     protected Map<ApplicationId, List<TrafficClass>> tcMap;
@@ -63,28 +63,38 @@ public class SolServiceImpl implements SolService {
     private HashMap<ApplicationId, Optimization> optimizations;
     private String remoteURL;
     private List<TrafficClass> allTrafficClasses;
-    private Lock tcMap_lock = new ReentrantLock();
-    private Condition tcMap_cond = tcMap_lock.newCondition();
-    private boolean available = false;
+    private static Lock tcMap_lock;
+    private static Condition tcMap_cond;
+    private static boolean available;
 
+    private static SolService instance;
+
+    public static SolService getInstance() {
+	return instance;
+    }
+    
     public void tcMap_wait() {
 	tcMap_lock.lock();
 	try {
 	    while (available == false) {
 		try {
+		    log.info("Calling cond.await! with 'available' = " + available);
 		    tcMap_cond.await();
-		} catch (InterruptedException e) { }
+ 		    log.info("cond.await returned with 'available' = " + available);
+		} catch (InterruptedException e) {
+		    log.error("Error trying to cond_wait for tcMap modification");
+		}
 	    }
 	    available = false;
-	    tcMap_cond.signalAll();
+	    log.info("Just set 'available' = " + available);
 	} finally {
 	    tcMap_lock.unlock();
-	}	
+	}
     }
+
 
     public void tcMap_put(ApplicationId id, List<TrafficClass> trafficClasses) {
 	tcMap_lock.lock();
-	available = true;
 	log.info("Putting into TCMAP- ID: " + id.toString());
 	log.info("Putting into TCMAP- LIST: ");
 	int count = 0;
@@ -93,6 +103,8 @@ public class SolServiceImpl implements SolService {
 	}
 	log.info("END TrafficClasses LIST");
 	tcMap.put(id, trafficClasses);
+	available = true;
+	log.info("Just set 'available' = " + available);
 	tcMap_cond.signalAll();
 	tcMap_lock.unlock();
     }
@@ -107,9 +119,10 @@ public class SolServiceImpl implements SolService {
 		recompute();
 		// TODO: results of recompute should be sent to the apps
 		// using the PathUpdateListener object
-
+		log.info("Going to WAIT!!");
 		//wait until tcMap is modified again
 		tcMap_wait();
+		log.info("Woken up going to recompute!!!");
             }
             log.debug("Recompute thread ending");
         }
@@ -117,13 +130,17 @@ public class SolServiceImpl implements SolService {
 	
     public SolServiceImpl() {
         // Initialize basic structures
-        tcMap = new HashMap<>();
-        listenerMap = new HashMap<>();
+        tcMap = new HashMap<ApplicationId,List<TrafficClass>>();
+        listenerMap = new HashMap<ApplicationId,List<PathUpdateListener>>();
         running = false;
-        deviceMap = new HashMap<>();
-        linkMap = new HashMap<>();
-	optimizations = new HashMap<>();
-	allTrafficClasses = new ArrayList<>();
+        deviceMap = new HashMap<DeviceId, Integer>();
+        linkMap = new HashMap<Integer, DeviceId>();
+	optimizations = new HashMap<ApplicationId, Optimization>();
+	allTrafficClasses = new ArrayList<TrafficClass>();
+	tcMap_lock = new ReentrantLock();
+	tcMap_cond = tcMap_lock.newCondition();
+	available = false;
+	
     }
 
     @Override
@@ -166,6 +183,9 @@ public class SolServiceImpl implements SolService {
     @Activate
     protected void activate() {
         running = true;
+
+	instance = new SolServiceImpl();
+	
         // Get the address of the SOL server from an environment variable
         String solServer = System.getenv(Config.SOL_ENV_VAR);
         if (solServer == null) {

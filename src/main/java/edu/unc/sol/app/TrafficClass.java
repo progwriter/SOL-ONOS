@@ -1,9 +1,9 @@
 package edu.unc.sol.app;
 
+
 import edu.unc.sol.service.SolService;
 import edu.unc.sol.service.SolServiceImpl;
-import org.apache.felix.scr.annotations.Reference;
-import org.apache.felix.scr.annotations.ReferenceCardinality;
+import org.apache.felix.scr.annotations.*;
 import org.onlab.packet.IpPrefix;
 import org.onosproject.net.DeviceId;
 import org.onosproject.net.flow.DefaultTrafficSelector;
@@ -15,6 +15,7 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+//@Component(immediate = true)
 public class TrafficClass {
     private final Logger log = LoggerFactory.getLogger(getClass());
     protected DefaultTrafficSelector selector;
@@ -22,9 +23,26 @@ public class TrafficClass {
     protected DeviceId src;
     protected DeviceId dst;
 
-    //    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
-    private static SolService solService = new SolServiceImpl();
+    //    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY,
+    //	       bind = "bindService",
+    //	       unbind = "unbindService",
+    //	       policy = ReferencePolicy.STATIC,
+    //	       name = "edu.unc.sol.service")
+    protected SolService solService = SolServiceImpl.getInstance();
 
+
+    public TrafficClass() {
+
+    }
+
+    protected void bindService(SolService exampleService) {
+	this.solService = exampleService;
+    }
+
+    protected void unbindService(SolService exampleService) {
+	this.solService = null;
+    }
+    
     /**
      * Create a new traffic class
      * @param selector ONOS traffic selector -- tells us what type of traffic belongs to this class.
@@ -48,6 +66,11 @@ public class TrafficClass {
         return selector;
     }
 
+    @Activate
+    protected void start() {
+
+    }
+    
     /**
      * Serialize this traffic class into a JSON-compatible object
      * @param id: Unique, sequential, integer ID assigned to the traffic class by the SOL Service
@@ -64,6 +87,9 @@ public class TrafficClass {
         //dst_ip_prefix - dst IP prefix that matches traffic in this class
 
         traffic_node.put("tcid", id);
+	if (solService == null) {
+	    log.error("SOL SERVICE IS NULLLL@!#@!$!@#");
+	}
         traffic_node.put("src", solService.getIntegerID(this.src));
         traffic_node.put("dst", solService.getIntegerID(this.dst));
         traffic_node.put("vol_flows", this.estimated_volume);
