@@ -3,6 +3,7 @@ package edu.unc.sol.app;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.Map;
 import java.util.Set;
 
 public class Optimization {
@@ -17,12 +18,16 @@ public class Optimization {
      */
     protected Objective objective;
 
+    protected Map<Resource, Double> costs;
+
     /**
      * Creates an optimization container
      */
-    public Optimization(Set<Constraint> constraints, Objective obj) {
+    public Optimization(Set<Constraint> constraints, Objective obj,
+                        Map<Resource, Double> costs) {
         objective = obj;
         this.constraints = constraints;
+        this.costs = costs;
     }
 
     /**
@@ -51,21 +56,23 @@ public class Optimization {
      */
     public JSONObject toJSONnode() {
         // The overall container
-	JSONObject o = new JSONObject();
+        JSONObject o = new JSONObject();
         // Objective node
-	JSONObject obj = new JSONObject();
-	o.put("objective", obj);
-	//        obj.setAll(this.objective.toJSONnode());
-	JSONObject objnode = this.objective.toJSONnode();
-	for (String key : JSONObject.getNames(objnode)) {
-	    obj.put(key, objnode.get(key));
-	}
+        o.put("objective", this.objective.toJSONnode());
         // The constraints will be array of strings
-	JSONArray constr = new JSONArray();
-	o.put("constraints", constr);
+        JSONArray constr = new JSONArray();
+        o.put("constraints", constr);
         for (Constraint c : this.constraints) {
             constr.put(c.toString());
         }
+        JSONArray rco = new JSONArray();
+        for (Map.Entry<Resource, Double> e : costs.entrySet()) {
+            JSONObject co = new JSONObject();
+            co.put("resource", e.getKey().toString());
+            co.put("cost", e.getValue());
+            rco.put(co);
+        }
+        o.put("resource_costs", rco);
         // Return the container
         return o;
     }

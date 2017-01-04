@@ -27,7 +27,7 @@ public class Objective {
         o.put("name", this.name.toString());
         // Check that we have a non-null resource
         if (this.res != null) {
-            // Put it in we have a real resource
+            // Put it in, we have a real resource
             o.put("resource", this.res.toString());
         }
         return o;
