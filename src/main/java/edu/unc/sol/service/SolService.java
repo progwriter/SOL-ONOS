@@ -16,5 +16,4 @@ public interface SolService {
 //    public void addListener(ApplicationId id, PathUpdateListener listener);
 //    public void removeListener(ApplicationId id, PathUpdateListener listener);
     public int getIntegerID(DeviceId id);
-
 }

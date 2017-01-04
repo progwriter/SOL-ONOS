@@ -14,6 +14,8 @@ import org.onosproject.net.flow.criteria.IPCriterion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
+
 public class TrafficClass {
     private final Logger log = LoggerFactory.getLogger(getClass());
     protected DefaultTrafficSelector selector;
@@ -21,7 +23,7 @@ public class TrafficClass {
     protected DeviceId src;
     protected DeviceId dst;
 
-    protected SolService solService = SolServiceImpl.getInstance();
+    protected static SolService solService = SolServiceImpl.getInstance();
     /**
      * Create a new traffic class
      *

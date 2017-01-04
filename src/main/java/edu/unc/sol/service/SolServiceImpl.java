@@ -215,7 +215,7 @@ public final class SolServiceImpl implements SolService {
     @Activate
     protected void activate() {
         running = true;
-        instance = new SolServiceImpl();
+        instance = this;
 
         // Get the address of the SOL server from an environment variable
         String solServer = System.getenv(Config.SOL_ENV_VAR);
