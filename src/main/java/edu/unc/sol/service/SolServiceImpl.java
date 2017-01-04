@@ -35,13 +35,14 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.locks.*;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static edu.unc.sol.service.Fairness.PROP_FAIR;
-import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
 
 @Component(immediate = true)
-//@Service
+@Service
 public final class SolServiceImpl implements SolService {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -63,136 +64,166 @@ public final class SolServiceImpl implements SolService {
     private HashMap<ApplicationId, Optimization> optimizations;
     private String remoteURL;
     private List<TrafficClass> allTrafficClasses;
-    private static Lock tcMap_lock;
-    private static Condition tcMap_cond;
-    private static boolean available;
+    private static Lock lock = new ReentrantLock();
+    private static Condition newApp = lock.newCondition();
+    private static boolean appsChanged = false;
 
-    private static SolService instance;
+    private static SolService instance = null;
 
+    // TODO: figure out the @Service annotation
     public static SolService getInstance() {
-	return instance;
-    }
-    
-    public void tcMap_wait() {
-	tcMap_lock.lock();
-	try {
-	    while (available == false) {
-		try {
-		    log.info("Calling cond.await! with 'available' = " + available);
-		    tcMap_cond.await();
- 		    log.info("cond.await returned with 'available' = " + available);
-		} catch (InterruptedException e) {
-		    log.error("Error trying to cond_wait for tcMap modification");
-		}
-	    }
-	    available = false;
-	    log.info("Just set 'available' = " + available);
-	} finally {
-	    tcMap_lock.unlock();
-	}
+        return instance;
     }
 
+//    private void tcMap_wait() {
+//        lock.lock();
+//        try {
+//            while (!appsChanged) {
+//                try {
+//                    log.info("Calling cond.await! with 'appsChanged' = " + appsChanged);
+//                    newApp.await();
+//                    log.info("cond.await returned with 'appsChanged' = " + appsChanged);
+//                } catch (InterruptedException e) {
+//                    log.error("Error trying to cond_wait for tcMap modification");
+//                }
+//            }
+//            appsChanged = false;
+//            log.info("Just set 'appsChanged' = " + appsChanged);
+//        } finally {
+//            lock.unlock();
+//        }
+//    }
 
-    public void tcMap_put(ApplicationId id, List<TrafficClass> trafficClasses) {
-	tcMap_lock.lock();
-	log.info("Putting into TCMAP- ID: " + id.toString());
-	log.info("Putting into TCMAP- LIST: ");
-	int count = 0;
-	for (TrafficClass curr : trafficClasses) {
-	    log.info("Index " + count + ": " + curr.toString());
-	}
-	log.info("END TrafficClasses LIST");
-	tcMap.put(id, trafficClasses);
-	available = true;
-	log.info("Just set 'available' = " + available);
-	tcMap_cond.signalAll();
-	tcMap_lock.unlock();
-    }
-    
+
+//    private void tcMap_put(ApplicationId id, List<TrafficClass> trafficClasses) {
+//        lock.lock();
+//        log.info("Putting into TCMAP- ID: " + id.toString());
+//        log.info("Putting into TCMAP- LIST: ");
+//        int count = 0;
+//        for (TrafficClass curr : trafficClasses) {
+//            log.info("Index " + count + ": " + curr.toString());
+//        }
+//        log.info("END TrafficClasses LIST");
+//        tcMap.put(id, trafficClasses);
+//        appsChanged = true;
+//        log.info("Just set 'appsChanged' = " + appsChanged);
+//        newApp.signalAll();
+//        lock.unlock();
+//    }
+
     private class SolutionCalculator implements Runnable {
         @Override
         public void run() {
             log.debug("Recompute thread started");
+            // Monitor changes to the traffic classes
+            // Upon change, trigger recompute
+            // results of recompute will be sent to the apps
+            // using the PathUpdateListener object
             while (running) {
-		// TODO: monitor changes to the traffic classes
-		// Upon change, trigger recompute
-		recompute();
-		// TODO: results of recompute should be sent to the apps
-		// using the PathUpdateListener object
-		log.info("Going to WAIT!!");
-		//wait until tcMap is modified again
-		tcMap_wait();
-		log.info("Woken up going to recompute!!!");
+                log.info("Going to WAIT!!");
+                lock.lock();
+                try {
+                    while (!appsChanged && running)
+                        newApp.await();
+                    log.info("Woken up going to recompute!!!");
+                    if (running) {
+                        recompute();
+                        appsChanged = false;
+                    } else {
+                        break;
+                    }
+                } catch (InterruptedException e) {
+                    continue;
+                } finally {
+                    lock.unlock();
+                }
             }
             log.debug("Recompute thread ending");
         }
     }
-	
+
     public SolServiceImpl() {
         // Initialize basic structures
-        tcMap = new HashMap<ApplicationId,List<TrafficClass>>();
-        listenerMap = new HashMap<ApplicationId,List<PathUpdateListener>>();
+        tcMap = new HashMap<ApplicationId, List<TrafficClass>>();
+        listenerMap = new HashMap<ApplicationId, List<PathUpdateListener>>();
         running = false;
         deviceMap = new HashMap<DeviceId, Integer>();
         linkMap = new HashMap<Integer, DeviceId>();
-	optimizations = new HashMap<ApplicationId, Optimization>();
-	allTrafficClasses = new ArrayList<TrafficClass>();
-	tcMap_lock = new ReentrantLock();
-	tcMap_cond = tcMap_lock.newCondition();
-	available = false;
-	
+        optimizations = new HashMap<ApplicationId, Optimization>();
+        allTrafficClasses = new ArrayList<TrafficClass>();
     }
 
     @Override
     public void registerApp(ApplicationId id, List<TrafficClass> trafficClasses, Optimization opt,
                             PathUpdateListener listener) {
-        listenerMap.put(id, new LinkedList<>());
-        listenerMap.get(id).add(listener);
-        optimizations.put(id, opt);
-	tcMap_put(id, trafficClasses);
-    }
-
-    @Override
-    public void updateTrafficClasses(ApplicationId id, List<TrafficClass> trafficClasses) {
-        tcMap_put(id, trafficClasses);
-    }
-
-    @Override
-    public void addListener(ApplicationId id, PathUpdateListener listener) {
-        // Adds a listener that awaits updated path results from the SOL instance
-        listenerMap.get(id).add(listener);
-    }
-
-    @Override
-    public void removeListener(ApplicationId id, PathUpdateListener listener) {
-        // Removes a callback listener for a given app
-        listenerMap.get(id).remove(listener);
-        if (listenerMap.get(id).isEmpty()) {
-            unregisterApp(id);
+        lock.lock();
+        try {
+            listenerMap.put(id, new LinkedList<>());
+            listenerMap.get(id).add(listener);
+            optimizations.put(id, opt);
+            tcMap.put(id, trafficClasses);
+            appsChanged = true;
+            newApp.signal();
+        } finally {
+            lock.unlock();
         }
+//        tcMap_put(id, trafficClasses);
     }
+
+    //TODO: implement locking for these functions as well (not a priority)
+//    @Override
+//    public void updateTrafficClasses(ApplicationId id, List<TrafficClass> trafficClasses) {
+//        lock.lock();
+//        try {
+//            tcMap_put(id, trafficClasses);
+//
+//        } finally {
+//            lock.unlock();
+//        }
+//    }
+
+//    @Override
+//    public void addListener(ApplicationId id, PathUpdateListener listener) {
+//        // Adds a listener that awaits updated path results from the SOL instance
+//        listenerMap.get(id).add(listener);
+//    }
+//
+//    @Override
+//    public void removeListener(ApplicationId id, PathUpdateListener listener) {
+//        // Removes a callback listener for a given app
+//        listenerMap.get(id).remove(listener);
+//        if (listenerMap.get(id).isEmpty()) {
+//            unregisterApp(id);
+//        }
+//    }
 
     @Override
     public void unregisterApp(ApplicationId id) {
         //Cleanup the app from the list of apps
-        tcMap.remove(id);
-        listenerMap.remove(id);
-        optimizations.remove(id);
+        lock.lock();
+        try {
+            tcMap.remove(id);
+            listenerMap.remove(id);
+            optimizations.remove(id);
+            appsChanged = true;
+            newApp.signalAll();
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Activate
     protected void activate() {
         running = true;
+        instance = new SolServiceImpl();
 
-	instance = new SolServiceImpl();
-	
         // Get the address of the SOL server from an environment variable
         String solServer = System.getenv(Config.SOL_ENV_VAR);
         if (solServer == null) {
             log.warn("No SOL server configured, using default values");
             solServer = "127.0.0.1:5000";
         }
-	
+
         // Build a proper url for the rest client
         StringBuilder builder = new StringBuilder();
         remoteURL = builder.append("http://").append(solServer).append("/api/v1/").toString();
@@ -259,7 +290,7 @@ public final class SolServiceImpl implements SolService {
             // Note: by default ONOS graphs (and thus edges) are directed.
             JSONObject link = new JSONObject();
             links.put(link);
-	    
+
             int srcid = getIntegerID(((DefaultTopologyVertex) e.src()).deviceId());
             int dstid = getIntegerID(((DefaultTopologyVertex) e.dst()).deviceId());
             link.put("source", srcid);
@@ -275,15 +306,15 @@ public final class SolServiceImpl implements SolService {
         topoj.put("nodes", nodes);
         topoj.put("links", links);
 
-	
-	//POSTing to a dummy server, uncomment to post to SOL server
+
+        //POSTing to a dummy server, uncomment to post to SOL server
 //	try {
 //	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:7500").body(topoj).asJson();
 //	    log.info("Successfully POSTed topology to dummy server");
 //	} catch (UnirestException e) {
 //	    e.printStackTrace();
 //	}
-	
+
         // Send request to the specified URL as a HTTP POST request.
         HttpResponse resp = null;
         try {
@@ -292,7 +323,7 @@ public final class SolServiceImpl implements SolService {
                     .body(new JsonNode(topoj.toString()))
                     .asString();
             if (resp.getStatus() != 200) {
-		log.error(resp.getStatus() + ": " + resp.getStatusText());
+                log.error(resp.getStatus() + ": " + resp.getStatusText());
             } else {
                 log.info("Successfully POSTed the topology to SOL server");
             }
@@ -303,78 +334,76 @@ public final class SolServiceImpl implements SolService {
 
     @Deactivate
     protected void deactivate() throws IOException {
-        // TODO: any cleanup if necessary @sanjay
+        running = false;
+        lock.lock();
+        try {
+            newApp.signalAll();
+        } finally {
+            lock.unlock();
+        }
         Unirest.shutdown();
+        instance = null;
         log.info("Stopped the SOL service");
     }
-    
+
     /**
      * Compute a new solution from all of the registered apps.
      */
     private void recompute() {
+        // NO need to POST anything if there are no apps
+        if (optimizations.isEmpty()) {
+            return;
+        }
         // Serialize all of our apps and post them to the server
         JSONObject composeObject = new JSONObject();
         composeObject.put("fairness", PROP_FAIR.toString());
 
         HashMap<TrafficClass, Integer> tc_ids = new HashMap<>();
         int tc_counter = 0;
-	JSONArray applist = new JSONArray();
-	composeObject.put("apps", new JSONObject().put("items", applist));
-	for (ApplicationId appid : optimizations.keySet()) {
-	    JSONObject app = new JSONObject();
-	    applist.put(app);
-	    app.put("id", appid.toString());
+        JSONArray applist = new JSONArray();
+        for (ApplicationId appid : optimizations.keySet()) {
+            JSONObject app = new JSONObject();
+            applist.put(app);
+            app.put("id", appid.toString());
             //TODO: allow predicate customization in the future @victor
             app.put("predicate", "null_predicate");
-	    //	    app.setAll(optimizations.get(appid).toJSONnode());
-	    JSONObject opnode = optimizations.get(appid).toJSONnode();
-	    for (String key : JSONObject.getNames(opnode)) {
-		app.put(key, opnode.get(key));
-	    }
-	    JSONArray tc_list = new JSONArray();
-	    app.put("traffic_classes", new JSONObject().put("items", tc_list));
-	    //tcMap.get(appid) is NULL??
+            //	    app.setAll(optimizations.get(appid).toJSONnode());
+            JSONObject opnode = optimizations.get(appid).toJSONnode();
+            for (String key : JSONObject.getNames(opnode)) {
+                app.put(key, opnode.get(key));
+            }
+            JSONArray tc_list = new JSONArray();
             for (TrafficClass tc : tcMap.get(appid)) {
-		tc_list.put(tc.toJSONnode(tc_counter++));
+                tc_list.put(tc.toJSONnode(tc_counter++));
                 // Keep track of all traffic classes so we can decode the response
                 allTrafficClasses.add(tc);
             }
+            app.put("traffic_classes", tc_list);
         }
-
-	//POSTing to a dummy server, uncomment to post to SOL server
-//	try {
-//	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:7500").body(composeObject).asJson();
-//	    log.info("Successfully POSTed the composition to the dummy server");
-//	} catch (UnirestException e) {
-//	    e.printStackTrace();
-//	}
-
+        composeObject.put("apps", applist);
 
         // Send request to the specified URL as a HTTP POST request.
-	HttpResponse resp = null;
-	try {
-	    resp = Unirest.post(remoteURL + "compose")
-		.header(HTTP.CONTENT_TYPE, "application/json")
-		.body(new JsonNode(composeObject.toString()))
-		.asString();
-	    if (resp.getStatus() != 200) {
-		log.error(resp.getStatus() + ": " + resp.getStatusText());
-	    } else {
-		log.info("Successfully POSTed the composition to SOL server");
-	    }
-	} catch (UnirestException e) {
-	    log.error("Failed to post composition to SOL server", e);
-	}	
+        try {
+            HttpResponse<JsonNode> resp = Unirest.post(remoteURL + "compose")
+                    .header(HTTP.CONTENT_TYPE, "application/json")
+                    .body(new JsonNode(composeObject.toString()))
+                    .asJson();
+            if (resp.getStatus() != 200) {
+                log.error(resp.getStatus() + ": " + resp.getStatusText());
+            } else {
+                log.info("Successfully POSTed the composition to SOL server");
+            }
+            processComposeResponse(resp);
+        } catch (UnirestException e) {
+            log.error("Failed to post composition to SOL server", e);
+        }
     }
 
-    private void processComposeResponse(HttpResponse resp) {
+    private void processComposeResponse(HttpResponse<JsonNode> resp) {
         // Get the response payload
-        // TODO: I hope arrays as top-level elements are allowed, check this @victor
-
-	//@victor will this properly get the response entity? -sanjay
-        JSONArray data = new JSONArray(resp.getBody().toString());
+        JSONArray data = resp.getBody().getArray();
         JSONObject app_paths;
-	for (int i = 0; i < data.length(); i++) {
+        for (int i = 0; i < data.length(); i++) {
             app_paths = data.getJSONObject(i);
 
             // Extract the app name, and id
@@ -421,8 +450,8 @@ public final class SolServiceImpl implements SolService {
         List<Link> link_list = new ArrayList<Link>();
 
         JSONObject prev_node = null;
-	for (int i = 0; i < pathnodes.length(); i++) {
-	    JSONObject node = pathnodes.getJSONObject(i);
+        for (int i = 0; i < pathnodes.length(); i++) {
+            JSONObject node = pathnodes.getJSONObject(i);
             if (prev_node == null) {
                 prev_node = node;
                 continue;
@@ -452,7 +481,7 @@ public final class SolServiceImpl implements SolService {
 
                 link_builder.src(src_connect_point);
                 link_builder.dst(dst_connect_point);
-		DefaultLink link = link_builder.build();
+                DefaultLink link = link_builder.build();
                 link_list.add((Link) link);
                 prev_node = node;
             }
@@ -461,27 +490,27 @@ public final class SolServiceImpl implements SolService {
     }
 
     private List<Map<IpPrefix, Double>> create_fractions(IpPrefix prefix, JSONArray paths) {
-	
+
         List<Map<IpPrefix, Double>> tables = new ArrayList<Map<IpPrefix, Double>>();
-	
+
         for (int i = 0; i < paths.length(); i++) {
             tables.add(new HashMap<IpPrefix, Double>());
         }
-	
+
         int precision = 32 - prefix.prefixLength();
         long power = precision;
-	
+
         double fraction_weight = Math.pow(2.0, precision);
         long new_total = (long) fraction_weight;
-	
-	//Normalize the Weights for each of the paths with this new pow of 2
+
+        //Normalize the Weights for each of the paths with this new pow of 2
         //index 0 is the path the weight is for when we sort the array
         //index 1 is the curr_load for the path
         long[][] normalized_weights = new long[paths.length()][2];
         long curr_new_total = new_total;
         int weight_index = 0;
         for (int i = 0; i < paths.length(); i++) {
-	    JSONObject pathobj = paths.getJSONObject(i);
+            JSONObject pathobj = paths.getJSONObject(i);
             double fraction = pathobj.getDouble("fraction");
             long weighted = (long) (fraction * fraction_weight);
             if (weight_index == (paths.length() - 1)) {
@@ -526,10 +555,10 @@ public final class SolServiceImpl implements SolService {
             }
 
             //add the first ('power' - 'highest_power_two') bits to the prefix
-	    String prefix_add_bits =
-		proper_binary.substring(0, (int) (power - highest_power_two));
+            String prefix_add_bits =
+                    proper_binary.substring(0, (int) (power - highest_power_two));
             Double prefix_fraction =
-		new Double(Math.pow(2.0, highest_power_two) / (new_total * 1.0));
+                    new Double(Math.pow(2.0, highest_power_two) / (new_total * 1.0));
 
             String extra_bits = prefix_add_bits;
             IpPrefix curr_prefix = prefix;
@@ -568,22 +597,22 @@ public final class SolServiceImpl implements SolService {
         ArrayList<PathIntent> result = new ArrayList<PathIntent>();
 
         for (int i = 0; i < all_paths.length(); i++) {
-	    JSONObject tcjson = all_paths.getJSONObject(i);
-	    
+            JSONObject tcjson = all_paths.getJSONObject(i);
+
             // Extract the traffic class
             int tcid = tcjson.getInt("tcid");
             TrafficClass tc = allTrafficClasses.get(tcid);
             TrafficSelector original_selector = tc.getSelector();
 
             JSONArray paths = tcjson.getJSONArray("paths");
-	    
+
             //@victor is this correct? how do we add the tcid to the intent we are adding? What should first arg me, "of", "snmp"?
             ProviderId provider_id = new ProviderId("of", Integer.toString(tcid));
-	    
+
             if (paths.length() == 1) {
                 PathIntent.Builder intent_builder = PathIntent.builder();
-		JSONObject pathobj = paths.getJSONObject(0);
-		JSONArray pathnodes = pathobj.getJSONArray("nodes");
+                JSONObject pathobj = paths.getJSONObject(0);
+                JSONArray pathnodes = pathobj.getJSONArray("nodes");
                 DefaultPath curr_path =
                         new DefaultPath(provider_id, create_links(pathnodes), 1.0, null);
                 intent_builder.path(curr_path);
@@ -599,7 +628,7 @@ public final class SolServiceImpl implements SolService {
 
             int path_index = -1;
             for (int j = 0; j < paths.length(); j++) {
-		JSONObject pathobj = paths.getJSONObject(j);
+                JSONObject pathobj = paths.getJSONObject(j);
                 path_index++;
 
                 // Get the path nodes
@@ -636,17 +665,17 @@ public final class SolServiceImpl implements SolService {
             }
         }
 
-	//printing path intents
-	log.info("Printing Path Intents as Sanity Check");
-	int count = 0;
-	for (PathIntent curr : result) {
-	    log.info("Intent " + count + ": " + curr.toString());
-	    count++;
-	}
-	log.info("Finished Printing Intents");
+        //printing path intents
+        log.info("Printing Path Intents as Sanity Check");
+        int count = 0;
+        for (PathIntent curr : result) {
+            log.info("Intent " + count + ": " + curr.toString());
+            count++;
+        }
+        log.info("Finished Printing Intents");
         return result;
     }
-    
+
 
     /**
      * Get the integer id assigned to an ONOS DeviceID
@@ -655,14 +684,13 @@ public final class SolServiceImpl implements SolService {
      */
     public int getIntegerID(DeviceId id) {
         // Grab the id from the device mapping
-	Integer int_id = deviceMap.get(id);
-	if (int_id == null) {
-	    log.error("ID not found int deviceMap: " + id.toString());
-	    return -1;
-	}
-	else {
-	    return deviceMap.get(id).intValue();
-	}
+        Integer int_id = deviceMap.get(id);
+        if (int_id == null) {
+            log.error("ID not found int deviceMap: " + id.toString());
+            return -1;
+        } else {
+            return int_id;
+        }
     }
 }
     
