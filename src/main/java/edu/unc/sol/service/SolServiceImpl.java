@@ -70,7 +70,6 @@ public final class SolServiceImpl implements SolService {
 
     private static SolService instance = null;
 
-    // TODO: figure out the @Service annotation
     public static SolService getInstance() {
         return instance;
     }
@@ -229,7 +228,7 @@ public final class SolServiceImpl implements SolService {
         remoteURL = builder.append("http://").append(solServer).append("/api/v1/").toString();
         log.info("The SOL Server is configured at: " + remoteURL);
         // Send the topology to the SOL server
-        sendTopology(remoteURL + "topology/");
+        sendTopology(remoteURL + "topology/", topologyToJson());
         // Start the monitor-solve loop in a new thread
         log.info("Going to start new SolutionCalculator Thread");
         new Thread(new SolutionCalculator()).start();
@@ -245,14 +244,7 @@ public final class SolServiceImpl implements SolService {
 //        return -1;
 //    }
 
-    /**
-     * Send the topology to the SOL python server.
-     *
-     * @param url the url of the endpoint.
-     */
-    private void sendTopology(String url) {
-        // WARNING: we are running with the implicit assumption that that the topology does not change
-        // Extract the topology from the topology service
+    private JSONObject topologyToJson() {
         TopologyGraph topo = topologyService.getGraph(topologyService.currentTopology());
         // Now build our request
         JSONObject topoj = new JSONObject();
@@ -306,6 +298,15 @@ public final class SolServiceImpl implements SolService {
         topoj.put("nodes", nodes);
         topoj.put("links", links);
 
+        return topoj;
+    }
+
+    /**
+     * Send the topology to the SOL python server.
+     *
+     * @param url the url of the endpoint.
+     */
+    private void sendTopology(String url, JSONObject topo) {
 
         //POSTing to a dummy server, uncomment to post to SOL server
 //	try {
@@ -320,7 +321,7 @@ public final class SolServiceImpl implements SolService {
         try {
             resp = Unirest.post(url)
                     .header(HTTP.CONTENT_TYPE, "application/json")
-                    .body(new JsonNode(topoj.toString()))
+                    .body(topo)
                     .asString();
             if (resp.getStatus() != 200) {
                 log.error(resp.getStatus() + ": " + resp.getStatusText());
@@ -330,6 +331,7 @@ public final class SolServiceImpl implements SolService {
         } catch (UnirestException e) {
             log.error("Failed to post topology to SOL server", e);
         }
+        log.info(deviceMap.toString());
     }
 
     @Deactivate
@@ -350,7 +352,7 @@ public final class SolServiceImpl implements SolService {
      * Compute a new solution from all of the registered apps.
      */
     private void recompute() {
-        // NO need to POST anything if there are no apps
+        // No need to POST anything if there are no apps
         if (optimizations.isEmpty()) {
             return;
         }
@@ -364,10 +366,9 @@ public final class SolServiceImpl implements SolService {
         for (ApplicationId appid : optimizations.keySet()) {
             JSONObject app = new JSONObject();
             applist.put(app);
-            app.put("id", appid.toString());
+            app.put("id", appid.name());
             //TODO: allow predicate customization in the future @victor
             app.put("predicate", "null_predicate");
-            //	    app.setAll(optimizations.get(appid).toJSONnode());
             JSONObject opnode = optimizations.get(appid).toJSONnode();
             for (String key : JSONObject.getNames(opnode)) {
                 app.put(key, opnode.get(key));
@@ -381,12 +382,13 @@ public final class SolServiceImpl implements SolService {
             app.put("traffic_classes", tc_list);
         }
         composeObject.put("apps", applist);
+        composeObject.put("topology", topologyToJson());
 
         // Send request to the specified URL as a HTTP POST request.
         try {
             HttpResponse<JsonNode> resp = Unirest.post(remoteURL + "compose")
                     .header(HTTP.CONTENT_TYPE, "application/json")
-                    .body(new JsonNode(composeObject.toString()))
+                    .body(composeObject)
                     .asJson();
             if (resp.getStatus() != 200) {
                 log.error(resp.getStatus() + ": " + resp.getStatusText());
@@ -684,6 +686,7 @@ public final class SolServiceImpl implements SolService {
      */
     public int getIntegerID(DeviceId id) {
         // Grab the id from the device mapping
+        log.info(deviceMap.toString());
         Integer int_id = deviceMap.get(id);
         if (int_id == null) {
             log.error("ID not found int deviceMap: " + id.toString());
