@@ -3,6 +3,7 @@ package edu.unc.sol.app;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -11,7 +12,7 @@ public class Optimization {
      * The set of constraints that define the optimization. These
      * dictate how traffic should be routed
      */
-    protected Set<Constraint> constraints;
+    protected List<Constraint> constraints;
 
     /**
      * The objective function of the optimization.
@@ -23,7 +24,7 @@ public class Optimization {
     /**
      * Creates an optimization container
      */
-    public Optimization(Set<Constraint> constraints, Objective obj,
+    public Optimization(List<Constraint> constraints, Objective obj,
                         Map<Resource, Double> costs) {
         objective = obj;
         this.constraints = constraints;
@@ -33,7 +34,7 @@ public class Optimization {
     /**
      * Return the set of stored constraints. The set is modifiable.
      */
-    public Set<Constraint> getConstraints() {
+    public List<Constraint> getConstraints() {
         return constraints;
     }
 

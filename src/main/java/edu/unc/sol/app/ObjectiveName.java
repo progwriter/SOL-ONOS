@@ -5,7 +5,8 @@ import java.util.UnknownFormatConversionException;
 public enum ObjectiveName {
 
     OBJ_MIN_LATENCY,
-    OBJ_MIN_LOAD,
+    OBJ_MIN_LINK_LOAD,
+    OBJ_MIN_NODE_LOAD,
     OBJ_MAX_FLOW;
 
     /**
@@ -16,8 +17,10 @@ public enum ObjectiveName {
         switch(this) {
             case OBJ_MAX_FLOW:
                 return "maxallflow";
-            case OBJ_MIN_LOAD:
-                return "minload";
+            case OBJ_MIN_LINK_LOAD:
+                return "minlinkload";
+            case OBJ_MIN_NODE_LOAD:
+                return "minnodeload";
             case OBJ_MIN_LATENCY:
                 return "minlatency";
             default:

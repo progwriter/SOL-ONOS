@@ -11,17 +11,20 @@ public enum Constraint {
     //TODO: define other constraints from SOL
     ROUTE_ALL,
     CAP_LINKS,
-    CAP_NODES;
+    CAP_NODES,
+    ALLOCATE_FLOW;
 
     @Override
     public String toString() {
         switch (this) {
+            case ALLOCATE_FLOW:
+                return "allocate_flow";
             case ROUTE_ALL:
-                return "routeall";
+                return "route_all";
             case CAP_LINKS:
-                return "caplinks";
+                return "capLinks";
             case CAP_NODES:
-                return "capnodes";
+                return "capNodes";
             default:
                 throw new UnknownFormatConversionException("Unknown constraint value");
         }
