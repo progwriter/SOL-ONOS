@@ -62,6 +62,7 @@ public final class SolServiceImpl implements SolService {
     private HashMap<DeviceId, Integer> deviceMap;
     private HashMap<Integer, DeviceId> linkMap;
     private HashMap<ApplicationId, Optimization> optimizations;
+    private HashMap<String, ApplicationId> app_ids;
     private String remoteURL;
     private List<TrafficClass> allTrafficClasses;
     private static Lock lock = new ReentrantLock();
@@ -150,6 +151,7 @@ public final class SolServiceImpl implements SolService {
         linkMap = new HashMap<Integer, DeviceId>();
         optimizations = new HashMap<ApplicationId, Optimization>();
         allTrafficClasses = new ArrayList<TrafficClass>();
+	app_ids = new HashMap<String, ApplicationId>();
     }
 
     @Override
@@ -161,6 +163,7 @@ public final class SolServiceImpl implements SolService {
             listenerMap.get(id).add(listener);
             optimizations.put(id, opt);
             tcMap.put(id, trafficClasses);
+	    app_ids.put(id.name(), id);
             appsChanged = true;
             newApp.signal();
         } finally {
@@ -204,6 +207,7 @@ public final class SolServiceImpl implements SolService {
             tcMap.remove(id);
             listenerMap.remove(id);
             optimizations.remove(id);
+	    app_ids.remove(id.name());
             appsChanged = true;
             newApp.signalAll();
         } finally {
@@ -418,7 +422,7 @@ public final class SolServiceImpl implements SolService {
             // Grab all the listeners registered for this app
             for (PathUpdateListener l : listenerMap.get(appid)) {
                 // Send the created path intents to the listeners
-                l.updatePaths(computeIntents(all_paths));
+                l.updatePaths(computeIntents(appname, all_paths));
             }
         }
     }
@@ -451,18 +455,22 @@ public final class SolServiceImpl implements SolService {
     private List<Link> create_links(JSONArray pathnodes) {
         List<Link> link_list = new ArrayList<Link>();
 
-        JSONObject prev_node = null;
+	//        JSONObject prev_node = null;
+	int prev_id = -1;
+	int curr_id = -1;
         for (int i = 0; i < pathnodes.length(); i++) {
-            JSONObject node = pathnodes.getJSONObject(i);
-            if (prev_node == null) {
-                prev_node = node;
+	    //            JSONObject node = pathnodes.getJSONObject(i);
+            if (prev_id == -1) {
+		//               prev_node = node;
+		prev_id = pathnodes.getInt(i);
                 continue;
             } else {
-                DefaultLink.Builder link_builder =
-                        DefaultLink.builder();
-                int prev_id = prev_node.getInt("id");
-                int curr_id = node.getInt("id");
-
+		//                DefaultLink.Builder link_builder =
+		//                        DefaultLink.builder();
+		//                int prev_id = prev_node.getInt("id");
+		//                int curr_id = node.getInt("id");
+		curr_id = pathnodes.getInt(i);
+		
                 DeviceId prev_dev = linkMap.get(prev_id);
                 DeviceId next_dev = linkMap.get(curr_id);
 
@@ -472,20 +480,26 @@ public final class SolServiceImpl implements SolService {
                 Set<Link> src_egress =
                         linkService.getDeviceEgressLinks(prev_dev);
 
+		log.info("&*()()*& Number of Src Egress Links: " + src_egress.size());
+		log.info("Looking for the Device ID: " + next_dev.toString());
                 for (Link curr_link : src_egress) {
                     ConnectPoint curr_connect_point = curr_link.dst();
                     DeviceId curr_dev = curr_connect_point.deviceId();
+		    log.info("Comparing to the Device ID: " + curr_dev.toString());
                     if (curr_dev.equals(next_dev)) {
+			log.info("FOUND A MATCH!");
                         dst_connect_point = curr_connect_point;
                         src_connect_point = curr_link.src();
+			log.info("SRC CONNECT POINT: " + src_connect_point.toString());
+			log.info("DST CONNECT POINT: " + dst_connect_point.toString());
                     }
                 }
-
-                link_builder.src(src_connect_point);
-                link_builder.dst(dst_connect_point);
-                DefaultLink link = link_builder.build();
-                link_list.add((Link) link);
-                prev_node = node;
+		log.info("Going to Build Link");
+		Link link = linkService.getLink(src_connect_point,dst_connect_point);
+		log.info("Just got the Link: " + link.toString());
+                link_list.add(link);
+		//                prev_node = node;
+		prev_id = curr_id;
             }
         }
         return link_list;
@@ -594,8 +608,11 @@ public final class SolServiceImpl implements SolService {
         return tables;
     }
 
-    private Collection<PathIntent> computeIntents(JSONArray all_paths) {
+    private Collection<PathIntent> computeIntents(String appname, JSONArray all_paths) {
 
+	log.info("Received the following JSON!");
+	log.info(all_paths.toString());
+	
         ArrayList<PathIntent> result = new ArrayList<PathIntent>();
 
         for (int i = 0; i < all_paths.length(); i++) {
@@ -615,11 +632,14 @@ public final class SolServiceImpl implements SolService {
                 PathIntent.Builder intent_builder = PathIntent.builder();
                 JSONObject pathobj = paths.getJSONObject(0);
                 JSONArray pathnodes = pathobj.getJSONArray("nodes");
+		DefaultAnnotations.Builder annotations_builder = DefaultAnnotations.builder();
                 DefaultPath curr_path =
-                        new DefaultPath(provider_id, create_links(pathnodes), 1.0, null);
+		    new DefaultPath(provider_id, create_links(pathnodes), 1.0, annotations_builder.build());
                 intent_builder.path(curr_path);
+		intent_builder.appId(app_ids.get(appname));
                 intent_builder.selector(original_selector);
-
+		
+		
                 PathIntent path_intent = intent_builder.build();
                 result.add(path_intent);
                 continue;
