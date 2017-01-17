@@ -33,6 +33,7 @@ import org.onosproject.net.topology.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.System;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.locks.Condition;
@@ -68,6 +69,7 @@ public final class SolServiceImpl implements SolService {
     private static Lock lock = new ReentrantLock();
     private static Condition newApp = lock.newCondition();
     private static boolean appsChanged = false;
+    protected long global_start_time;
 
     private static SolService instance = null;
 
@@ -114,20 +116,22 @@ public final class SolServiceImpl implements SolService {
     private class SolutionCalculator implements Runnable {
         @Override
         public void run() {
-            log.debug("Recompute thread started");
+	    log.debug("Recompute thread started");
             // Monitor changes to the traffic classes
             // Upon change, trigger recompute
             // results of recompute will be sent to the apps
             // using the PathUpdateListener object
             while (running) {
-                log.info("Going to WAIT!!");
+                log.debug("Going to WAIT!!");
                 lock.lock();
                 try {
                     while (!appsChanged && running)
                         newApp.await();
-                    log.info("Woken up going to recompute!!!");
+                    log.debug("Woken up going to recompute!!!");
                     if (running) {
                         recompute();
+			log.info("Just recomputed Intents at " + String.valueOf(System.currentTimeMillis() - global_start_time) + "ms");
+
                         appsChanged = false;
                     } else {
                         break;
@@ -152,6 +156,7 @@ public final class SolServiceImpl implements SolService {
         optimizations = new HashMap<ApplicationId, Optimization>();
         allTrafficClasses = new ArrayList<TrafficClass>();
 	app_ids = new HashMap<String, ApplicationId>();
+	global_start_time = System.currentTimeMillis();
     }
 
     @Override
@@ -159,6 +164,7 @@ public final class SolServiceImpl implements SolService {
                             PathUpdateListener listener) {
         lock.lock();
         try {
+	    log.info(id.name() + " is registering with SOL at " + String.valueOf(System.currentTimeMillis() - global_start_time) + "ms");
             listenerMap.put(id, new LinkedList<>());
             listenerMap.get(id).add(listener);
             optimizations.put(id, opt);
@@ -480,25 +486,16 @@ public final class SolServiceImpl implements SolService {
                 Set<Link> src_egress =
                         linkService.getDeviceEgressLinks(prev_dev);
 
-		log.info("&*()()*& Number of Src Egress Links: " + src_egress.size());
-		log.info("Looking for the Device ID: " + next_dev.toString());
                 for (Link curr_link : src_egress) {
                     ConnectPoint curr_connect_point = curr_link.dst();
                     DeviceId curr_dev = curr_connect_point.deviceId();
-		    log.info("Comparing to the Device ID: " + curr_dev.toString());
                     if (curr_dev.equals(next_dev)) {
-			log.info("FOUND A MATCH!");
                         dst_connect_point = curr_connect_point;
                         src_connect_point = curr_link.src();
-			log.info("SRC CONNECT POINT: " + src_connect_point.toString());
-			log.info("DST CONNECT POINT: " + dst_connect_point.toString());
                     }
                 }
-		log.info("Going to Build Link");
 		Link link = linkService.getLink(src_connect_point,dst_connect_point);
-		log.info("Just got the Link: " + link.toString());
                 link_list.add(link);
-		//                prev_node = node;
 		prev_id = curr_id;
             }
         }
@@ -609,9 +606,6 @@ public final class SolServiceImpl implements SolService {
     }
 
     private Collection<PathIntent> computeIntents(String appname, JSONArray all_paths) {
-
-	log.info("Received the following JSON!");
-	log.info(all_paths.toString());
 	
         ArrayList<PathIntent> result = new ArrayList<PathIntent>();
 
@@ -688,6 +682,7 @@ public final class SolServiceImpl implements SolService {
         }
 
         //printing path intents
+	/*
         log.info("Printing Path Intents as Sanity Check");
         int count = 0;
         for (PathIntent curr : result) {
@@ -695,6 +690,7 @@ public final class SolServiceImpl implements SolService {
             count++;
         }
         log.info("Finished Printing Intents");
+	*/
         return result;
     }
 
@@ -706,7 +702,6 @@ public final class SolServiceImpl implements SolService {
      */
     public int getIntegerID(DeviceId id) {
         // Grab the id from the device mapping
-        log.info(deviceMap.toString());
         Integer int_id = deviceMap.get(id);
         if (int_id == null) {
             log.error("ID not found int deviceMap: " + id.toString());
