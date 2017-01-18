@@ -668,12 +668,13 @@ public final class SolServiceImpl implements SolService {
                     }
 
                     TrafficSelector new_selector = ts_builder.build();
-
+		    DefaultAnnotations.Builder annotations_builder = DefaultAnnotations.builder();
                     PathIntent.Builder intent_builder = PathIntent.builder();
                     DefaultPath curr_path =
-                            new DefaultPath(provider_id, link_list,
-                                    tables.get(path_index).get(new_prefix), null);
+			new DefaultPath(provider_id, link_list,
+					tables.get(path_index).get(new_prefix), annotations_builder.build());
                     intent_builder.path(curr_path);
+		    intent_builder.appId(app_ids.get(appname));
                     intent_builder.selector(new_selector);
                     PathIntent path_intent = intent_builder.build();
                     result.add(path_intent);
