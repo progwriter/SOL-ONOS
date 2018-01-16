@@ -85,6 +85,8 @@ public final class SolServiceImpl implements SolService {
     private HashMap<DeviceId, Integer> deviceMap;
     private HashMap<Integer, DeviceId> linkMap;
     private HashMap<ApplicationId, Optimization> optimizations;
+    private HashMap<ApplicationId, String> predicates;
+    private HashMap<ApplicationId, List<Integer>> middleboxes;
     private HashMap<String, ApplicationId> app_ids;
     private String remoteURL;
     private List<TrafficClass> allTrafficClasses;
@@ -176,6 +178,8 @@ public final class SolServiceImpl implements SolService {
         running = false;
         deviceMap = new HashMap<DeviceId, Integer>();
         linkMap = new HashMap<Integer, DeviceId>();
+	middleboxes = new HashMap<ApplicationId, List<Integer>>();
+	predicates = new HashMap<ApplicationId, String>();
         optimizations = new HashMap<ApplicationId, Optimization>();
         allTrafficClasses = new ArrayList<TrafficClass>();
 	app_ids = new HashMap<String, ApplicationId>();
@@ -184,7 +188,7 @@ public final class SolServiceImpl implements SolService {
 
     @Override
     public void registerApp(ApplicationId id, List<TrafficClass> trafficClasses, Optimization opt,
-                            PathUpdateListener listener) {
+                            PathUpdateListener listener, String predicate, List<Integer> app_middleboxes) {
 	
 	// Acquire the lock to ensure only one app registers at a time
         lock.lock();
@@ -195,6 +199,10 @@ public final class SolServiceImpl implements SolService {
 	    // create a linked list of listeners for the application
 	    listenerMap.put(id, new LinkedList<>());
             listenerMap.get(id).add(listener);
+	    // keep track of the predicate function for this app
+	    predicates.put(id, predicate);
+	    // keep track of the middleboxes this app recognizes
+	    middleboxes.put(id, app_middleboxes);
 	    // keep track of the optimization this app wants
             optimizations.put(id, opt);
 	    // keep track of the traffic classes for this app
@@ -209,7 +217,7 @@ public final class SolServiceImpl implements SolService {
 		// build the traffic selector to match on the traffic that the switch sees
 		TrafficSelector.Builder ts_builder = DefaultTrafficSelector.builder();
 		ts_builder.matchEthType(EtherType.IPV4.ethType().toShort());
-		int ip_off = Integer.parseInt(dev.id().toString().substring(3)) - 1;
+		int ip_off = Integer.parseInt(dev.id().toString().substring(3), 16) - 1;
 		ts_builder.matchIPDst(IpPrefix.valueOf(prefix+ip_off,32));
 		TrafficSelector ts = ts_builder.build();
 
@@ -339,7 +347,7 @@ public final class SolServiceImpl implements SolService {
         remoteURL = builder.append("http://").append(solServer).append("/api/v1/").toString();
         log.info("The SOL Server is configured at: " + remoteURL);
         // Send the topology to the SOL server
-        sendTopology(remoteURL + "topology/", topologyToJson());
+        sendTopology(remoteURL + "topology/", topologyToJson(null));
 
 	
         // Start the monitor-solve loop in a new thread
@@ -348,10 +356,14 @@ public final class SolServiceImpl implements SolService {
         log.info("Started the SOL service");
     }
 
-    private JSONObject topologyToJson() {
+    private JSONObject topologyToJson(ArrayList<Integer> middleboxes) {
 
 	// Get the Topology Graph
         TopologyGraph topo = topologyService.getGraph(topologyService.currentTopology());
+	// check if middleboxes are provided
+	if (middleboxes == null) {
+	    middleboxes = new ArrayList<Integer>();
+	}
         // Now build our request
         JSONObject topoj = new JSONObject();
         // Make sure the graph is directed
@@ -369,13 +381,19 @@ public final class SolServiceImpl implements SolService {
         edge_mapping = new Edge[num_vertexes][num_vertexes];
         for (Vertex v : topology_vertexes) {
             DeviceId dev = ((DefaultTopologyVertex) v).deviceId();
-	    int vertex_index = Integer.parseInt(dev.toString().substring(3)) - 1;
+	    // indexed from 0 while the hosts are indexed by 1
+	    int vertex_index = Integer.parseInt(dev.toString().substring(3), 16) - 1;
 	    deviceMap.put(dev, vertex_index);
             linkMap.put(vertex_index, dev);
             JSONObject node = new JSONObject();
             nodes.put(node);
             node.put("id", getIntegerID(dev));
-            // Devices in ONOS are by default switches (hosts are a separate category)
+            // Devices in ONOS are by default switches (hosts are a separate category)OA
+	    
+	    if (middleboxes.contains(new Integer(vertex_index))) {
+		node.put("hasMbox", "true");
+	    }
+	    
             node.put("services", "switch");
             // We need resources to be present, but for now we are not extracting any info from ONOS
             node.put("resources", new JSONObject());
@@ -392,6 +410,8 @@ public final class SolServiceImpl implements SolService {
             int dstid = getIntegerID(((DefaultTopologyVertex) e.dst()).deviceId());
             link.put("source", srcid);
             link.put("target", dstid);
+	    link.put("srcname", srcid);
+	    link.put("dstname", dstid);
             JSONObject resources = new JSONObject();
             link.put("resources", resources);
             ConnectPoint edge_link_src = (((DefaultTopologyEdge) e).link()).src();
@@ -460,12 +480,21 @@ public final class SolServiceImpl implements SolService {
         HashMap<TrafficClass, Integer> tc_ids = new HashMap<>();
         int tc_counter = 0;
         JSONArray applist = new JSONArray();
+	ArrayList<Integer> all_middleboxes = new ArrayList<Integer>();
         for (ApplicationId appid : optimizations.keySet()) {
             JSONObject app = new JSONObject();
             applist.put(app);
             app.put("id", appid.name());
-            //TODO: allow predicate customization in the future @victor
-            app.put("predicate", "null_predicate");
+            app.put("predicate", predicates.get(appid));
+	    List<Integer> curr_middleboxes = middleboxes.get(appid);
+	    if (curr_middleboxes != null) {
+		for (Integer mbid : curr_middleboxes) {
+		    if (!all_middleboxes.contains(mbid)) {
+			all_middleboxes.add(mbid);
+		    }
+		}
+	    }
+		    
             JSONObject opnode = optimizations.get(appid).toJSONnode();
             for (String key : JSONObject.getNames(opnode)) {
                 app.put(key, opnode.get(key));
@@ -479,7 +508,7 @@ public final class SolServiceImpl implements SolService {
             app.put("traffic_classes", tc_list);
         }
         composeObject.put("apps", applist);
-        composeObject.put("topology", topologyToJson());
+        composeObject.put("topology", topologyToJson(all_middleboxes));
 
         // Send request to the specified URL as a HTTP POST request.
         try {

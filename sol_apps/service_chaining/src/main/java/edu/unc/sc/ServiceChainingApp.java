@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package edu.unc.te;
+package edu.unc.sc;
 // SOL imports
 import edu.unc.sol.app.*;
 import edu.unc.sol.service.SolService;
@@ -42,7 +42,7 @@ import java.lang.Integer;
 import static edu.unc.sol.app.Constraint.*;
 
 @Component(immediate = true)
-public class TrafficEngineeringApp {
+public class ServiceChainingApp {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
@@ -113,21 +113,24 @@ public class TrafficEngineeringApp {
     @Activate
     protected void activate() {
 	// register the application with the core service
-        appid = core.registerApplication("TEApp");
+        appid = core.registerApplication("SCApp");
         HashMap<Resource, Double> costs = new HashMap<>();
         costs.put(Resource.BANDWIDTH, 1.0);
+	ArrayList<Integer> middleboxes = new ArrayList<Integer>();
+	// index the node num that is a middlebox from 0
+	middleboxes.add(new Integer(1));
 	// register the application with SOL
         sol.registerApp(appid, makeTrafficClasses(),
                 new Optimization(getConstraints(), getObjective(), costs),
-			paths -> paths.forEach(p -> intentService.submit(p)), "null_predicate", null);
-        log.info("TE app started");
+			paths -> paths.forEach(p -> intentService.submit(p)), "has_mbox", middleboxes);
+        log.info("SC app started");
     }
 
     @Deactivate
     protected void deactivate() {
 	// unregister the application with SOL
         sol.unregisterApp(appid);
-        log.info("TE app stopped");
+        log.info("SC app stopped");
     }
 
 }

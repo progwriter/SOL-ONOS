@@ -3,7 +3,7 @@
 - Currently trying to look into what kind of other Apps this API can/can't support
 
 Current Apps:
-- Traffic Engineering: written, somewhat tested
-- Service Chaining: partly written
+- Traffic Engineering: written
+- Service Chaining: written
 - Load Balancer:
 - Power Saver: 
