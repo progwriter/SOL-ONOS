@@ -113,7 +113,7 @@ public class TrafficEngineeringApp {
     @Activate
     protected void activate() {
 	// register the application with the core service
-        appid = core.registerApplication("TEApp");
+        appid = core.registerApplication("TEApp2");
         HashMap<Resource, Double> costs = new HashMap<>();
         costs.put(Resource.BANDWIDTH, 1.0);
 	// register the application with SOL
