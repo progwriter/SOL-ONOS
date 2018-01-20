@@ -10,7 +10,7 @@ import java.util.List;
 
 public interface SolService {
     public void registerApp(ApplicationId id, List<TrafficClass> trafficClasses, Optimization opt,
-                     PathUpdateListener listener);
+			    PathUpdateListener listener, String predicate, List<Integer> middleboxes);
     public void unregisterApp(ApplicationId id);
 //    public void updateTrafficClasses(ApplicationId id, List<TrafficClass> trafficClasses);
 //    public void addListener(ApplicationId id, PathUpdateListener listener);

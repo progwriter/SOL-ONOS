@@ -1,45 +1,62 @@
 package edu.unc.sol.service;
-
+// Unirest imports
 import com.mashape.unirest.http.HttpResponse;
 import com.mashape.unirest.http.JsonNode;
 import com.mashape.unirest.http.Unirest;
 import com.mashape.unirest.http.exceptions.UnirestException;
+// SOL imports
 import edu.unc.sol.app.Optimization;
 import edu.unc.sol.app.PathUpdateListener;
 import edu.unc.sol.app.TrafficClass;
 import edu.unc.sol.util.Config;
+// JSON + Annotation imports
 import org.apache.felix.scr.annotations.*;
 import org.apache.http.protocol.HTTP;
 import org.json.JSONArray;
 import org.json.JSONObject;
+// ONLAB imports
 import org.onlab.graph.Edge;
 import org.onlab.graph.Vertex;
 import org.onlab.packet.Ip4Address;
 import org.onlab.packet.IpAddress;
 import org.onlab.packet.IpPrefix;
+import org.onlab.packet.EthType.EtherType;
+// ONOSPROJECT imports
 import org.onosproject.core.ApplicationId;
 import org.onosproject.core.CoreService;
 import org.onosproject.net.*;
 import org.onosproject.net.device.DeviceService;
+import org.onosproject.net.Device;
+import org.onosproject.net.flow.FlowRuleService;
+import org.onosproject.net.flow.FlowRule;
+import org.onosproject.net.flow.DefaultFlowRule;
+import org.onosproject.net.flow.DefaultTrafficTreatment;
 import org.onosproject.net.flow.DefaultTrafficSelector;
+import org.onosproject.net.flow.TrafficTreatment;
 import org.onosproject.net.flow.TrafficSelector;
 import org.onosproject.net.flow.criteria.Criteria;
 import org.onosproject.net.flow.criteria.Criterion;
 import org.onosproject.net.flow.criteria.IPCriterion;
 import org.onosproject.net.intent.PathIntent;
 import org.onosproject.net.link.LinkService;
+import org.onosproject.net.host.HostService;
+import org.onosproject.net.DefaultEdgeLink;
+import org.onosproject.net.PortNumber;
 import org.onosproject.net.provider.ProviderId;
 import org.onosproject.net.topology.*;
+// Logger imports
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+// Java imports
 import java.lang.System;
+import java.lang.Integer;
+import java.lang.String;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-
+// Fairness Metric imports
 import static edu.unc.sol.service.Fairness.PROP_FAIR;
 
 @Component(immediate = true)
@@ -57,12 +74,19 @@ public final class SolServiceImpl implements SolService {
     protected CoreService core;
     @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
     protected LinkService linkService;
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected HostService hostService;
+    @Reference(cardinality = ReferenceCardinality.MANDATORY_UNARY)
+    protected FlowRuleService flowService;
+    
     private Edge[][] edge_mapping;
     private Vertex[] vertex_mapping;
     private Boolean running;
     private HashMap<DeviceId, Integer> deviceMap;
     private HashMap<Integer, DeviceId> linkMap;
     private HashMap<ApplicationId, Optimization> optimizations;
+    private HashMap<ApplicationId, String> predicates;
+    private HashMap<ApplicationId, List<Integer>> middleboxes;
     private HashMap<String, ApplicationId> app_ids;
     private String remoteURL;
     private List<TrafficClass> allTrafficClasses;
@@ -77,48 +101,50 @@ public final class SolServiceImpl implements SolService {
         return instance;
     }
 
-//    private void tcMap_wait() {
-//        lock.lock();
-//        try {
-//            while (!appsChanged) {
-//                try {
-//                    log.info("Calling cond.await! with 'appsChanged' = " + appsChanged);
-//                    newApp.await();
-//                    log.info("cond.await returned with 'appsChanged' = " + appsChanged);
-//                } catch (InterruptedException e) {
-//                    log.error("Error trying to cond_wait for tcMap modification");
-//                }
-//            }
-//            appsChanged = false;
-//            log.info("Just set 'appsChanged' = " + appsChanged);
-//        } finally {
-//            lock.unlock();
-//        }
-//    }
+
+    //    private void tcMap_wait() {
+    //        lock.lock();
+    //        try {
+    //            while (!appsChanged) {
+    //                try {
+    //                    log.info("Calling cond.await! with 'appsChanged' = " + appsChanged);
+    //                    newApp.await();
+    //                    log.info("cond.await returned with 'appsChanged' = " + appsChanged);
+    //                } catch (InterruptedException e) {
+    //                    log.error("Error trying to cond_wait for tcMap modification");
+    //                }
+    //            }
+    //            appsChanged = false;
+    //            log.info("Just set 'appsChanged' = " + appsChanged);
+    //        } finally {
+    //            lock.unlock();
+    //        }
+    //    }
 
 
-//    private void tcMap_put(ApplicationId id, List<TrafficClass> trafficClasses) {
-//        lock.lock();
-//        log.info("Putting into TCMAP- ID: " + id.toString());
-//        log.info("Putting into TCMAP- LIST: ");
-//        int count = 0;
-//        for (TrafficClass curr : trafficClasses) {
-//            log.info("Index " + count + ": " + curr.toString());
-//        }
-//        log.info("END TrafficClasses LIST");
-//        tcMap.put(id, trafficClasses);
-//        appsChanged = true;
-//        log.info("Just set 'appsChanged' = " + appsChanged);
-//        newApp.signalAll();
-//        lock.unlock();
-//    }
-
+    //    private void tcMap_put(ApplicationId id, List<TrafficClass> trafficClasses) {
+    //        lock.lock();
+    //        log.info("Putting into TCMAP- ID: " + id.toString());
+    //        log.info("Putting into TCMAP- LIST: ");
+    //        int count = 0;
+    //        for (TrafficClass curr : trafficClasses) {
+    //            log.info("Index " + count + ": " + curr.toString());
+    //        }
+    //        log.info("END TrafficClasses LIST");
+    //        tcMap.put(id, trafficClasses);
+    //        appsChanged = true;
+    //        log.info("Just set 'appsChanged' = " + appsChanged);
+    //        newApp.signalAll();
+    //        lock.unlock();
+    //    }
+    
+    // this thread will wait for new apps to register with SOL and properly recompute the intents for ONOS accordingly
     private class SolutionCalculator implements Runnable {
         @Override
         public void run() {
 	    log.debug("Recompute thread started");
-            // Monitor changes to the traffic classes
-            // Upon change, trigger recompute
+            // monitor changes to the traffic classes
+            // upon change, trigger recompute
             // results of recompute will be sent to the apps
             // using the PathUpdateListener object
             while (running) {
@@ -131,7 +157,6 @@ public final class SolServiceImpl implements SolService {
                     if (running) {
                         recompute();
 			log.info("Just recomputed Intents at " + String.valueOf(System.currentTimeMillis() - global_start_time) + "ms");
-
                         appsChanged = false;
                     } else {
                         break;
@@ -153,6 +178,8 @@ public final class SolServiceImpl implements SolService {
         running = false;
         deviceMap = new HashMap<DeviceId, Integer>();
         linkMap = new HashMap<Integer, DeviceId>();
+	middleboxes = new HashMap<ApplicationId, List<Integer>>();
+	predicates = new HashMap<ApplicationId, String>();
         optimizations = new HashMap<ApplicationId, Optimization>();
         allTrafficClasses = new ArrayList<TrafficClass>();
 	app_ids = new HashMap<String, ApplicationId>();
@@ -161,21 +188,91 @@ public final class SolServiceImpl implements SolService {
 
     @Override
     public void registerApp(ApplicationId id, List<TrafficClass> trafficClasses, Optimization opt,
-                            PathUpdateListener listener) {
+                            PathUpdateListener listener, String predicate, List<Integer> app_middleboxes) {
+	
+	// Acquire the lock to ensure only one app registers at a time
         lock.lock();
+	
         try {
 	    log.info(id.name() + " is registering with SOL at " + String.valueOf(System.currentTimeMillis() - global_start_time) + "ms");
-            listenerMap.put(id, new LinkedList<>());
+
+	    // create a linked list of listeners for the application
+	    listenerMap.put(id, new LinkedList<>());
             listenerMap.get(id).add(listener);
+	    // keep track of the predicate function for this app
+	    predicates.put(id, predicate);
+	    // keep track of the middleboxes this app recognizes
+	    middleboxes.put(id, app_middleboxes);
+	    // keep track of the optimization this app wants
             optimizations.put(id, opt);
+	    // keep track of the traffic classes for this app
             tcMap.put(id, trafficClasses);
+	    // keep track of the App ID for this app
 	    app_ids.put(id.name(), id);
+	    
+	    // install flow on switch i to forward traffic to host i
+	    int prefix = 167772161; // 10.0.0.1
+	    for (Device dev : deviceService.getAvailableDevices()) {
+
+		// build the traffic selector to match on the traffic that the switch sees
+		TrafficSelector.Builder ts_builder = DefaultTrafficSelector.builder();
+		ts_builder.matchEthType(EtherType.IPV4.ethType().toShort());
+		int ip_off = Integer.parseInt(dev.id().toString().substring(3), 16) - 1;
+		ts_builder.matchIPDst(IpPrefix.valueOf(prefix+ip_off,32));
+		TrafficSelector ts = ts_builder.build();
+
+		// build the traffic treatment which decides the output action for the traffic
+		TrafficTreatment.Builder tt_builder = DefaultTrafficTreatment.builder();
+		tt_builder.setOutput(PortNumber.portNumber(1));
+		TrafficTreatment tt = tt_builder.build();
+
+		// build the flow rule for the switch 
+		FlowRule.Builder flowrule_builder = DefaultFlowRule.builder();
+		flowrule_builder.forDevice(dev.id());
+		flowrule_builder.makePermanent();
+		flowrule_builder.withPriority(200);
+		flowrule_builder.withSelector(ts);
+		flowrule_builder.withTreatment(tt);
+		flowrule_builder.fromApp(id);
+		FlowRule flowrule = flowrule_builder.build();
+		
+		// build the traffic selector to match on all ARP traffic 
+		TrafficSelector.Builder as_builder = DefaultTrafficSelector.builder();
+		as_builder.matchEthType(EtherType.ARP.ethType().toShort());
+		TrafficSelector as = as_builder.build();
+
+		// build the traffic treatment for the ARP traffic
+		TrafficTreatment.Builder aa_builder = DefaultTrafficTreatment.builder();
+		aa_builder.setOutput(PortNumber.portNumber(1));
+		TrafficTreatment aa = aa_builder.build();
+
+		// build the flow rule for the switch
+		FlowRule.Builder arprule_builder = DefaultFlowRule.builder();
+		arprule_builder.forDevice(dev.id());
+		arprule_builder.makePermanent();
+		arprule_builder.withPriority(50);
+		arprule_builder.withSelector(as);
+		arprule_builder.withTreatment(aa);
+		arprule_builder.fromApp(id);
+		FlowRule arprule = arprule_builder.build();
+
+		// install the flows using the flow service
+		flowService.applyFlowRules(flowrule);
+		flowService.applyFlowRules(arprule);
+		
+	    }
+
+	    // indicate we've changed the apps to reinstall the intents with the SolutionCalculator
             appsChanged = true;
+	    // wake up any other apps who are waiting on the lock to registers with Chopin
             newApp.signal();
+	    
         } finally {
+
+	    // release the lock
             lock.unlock();
+	    
         }
-//        tcMap_put(id, trafficClasses);
     }
 
     //TODO: implement locking for these functions as well (not a priority)
@@ -207,18 +304,30 @@ public final class SolServiceImpl implements SolService {
 
     @Override
     public void unregisterApp(ApplicationId id) {
-        //Cleanup the app from the list of apps
-        lock.lock();
+        // cleanup the app from the list of apps
+
+	// acquire the lock
+	lock.lock();
+	
         try {
+
+	    // remove the app related info
             tcMap.remove(id);
             listenerMap.remove(id);
             optimizations.remove(id);
 	    app_ids.remove(id.name());
+	    
+	    // indicate we've changed the apps to reinstall the intents with the SolutionCalculator
             appsChanged = true;
-            newApp.signalAll();
+	    // wake up any other apps who are waiting on the lock to registers with Chopin
+            newApp.signal();
+
         } finally {
+
+	    // release the lock
             lock.unlock();
-        }
+
+	}
     }
 
     @Activate
@@ -238,28 +347,28 @@ public final class SolServiceImpl implements SolService {
         remoteURL = builder.append("http://").append(solServer).append("/api/v1/").toString();
         log.info("The SOL Server is configured at: " + remoteURL);
         // Send the topology to the SOL server
-        sendTopology(remoteURL + "topology/", topologyToJson());
+        sendTopology(remoteURL + "topology/", topologyToJson(null));
+
+	
         // Start the monitor-solve loop in a new thread
         log.info("Going to start new SolutionCalculator Thread");
         new Thread(new SolutionCalculator()).start();
         log.info("Started the SOL service");
     }
 
-//    private int findVertexId(Vertex v) {
-//        for (int i = 0; i < vertex_mapping.length; i++) {
-//            if (vertex_mapping[i].equals(v)) {
-//                return i;
-//            }
-//        }
-//        return -1;
-//    }
+    private JSONObject topologyToJson(ArrayList<Integer> middleboxes) {
 
-    private JSONObject topologyToJson() {
+	// Get the Topology Graph
         TopologyGraph topo = topologyService.getGraph(topologyService.currentTopology());
+	// check if middleboxes are provided
+	if (middleboxes == null) {
+	    middleboxes = new ArrayList<Integer>();
+	}
         // Now build our request
         JSONObject topoj = new JSONObject();
         // Make sure the graph is directed
-        topoj.put("graph", new JSONObject().put("directed", true));
+        topoj.put("graph", new JSONObject());
+	topoj.put("directed",true);
         // Create holders for nodes and link
         JSONArray nodes = new JSONArray();
         JSONArray links = new JSONArray();
@@ -270,19 +379,23 @@ public final class SolServiceImpl implements SolService {
         int num_edges = topology_edges.size();
         vertex_mapping = new Vertex[num_vertexes];
         edge_mapping = new Edge[num_vertexes][num_vertexes];
-        int vertex_index = 0;
         for (Vertex v : topology_vertexes) {
             DeviceId dev = ((DefaultTopologyVertex) v).deviceId();
-            deviceMap.put(dev, vertex_index);
+	    // indexed from 0 while the hosts are indexed by 1
+	    int vertex_index = Integer.parseInt(dev.toString().substring(3), 16) - 1;
+	    deviceMap.put(dev, vertex_index);
             linkMap.put(vertex_index, dev);
             JSONObject node = new JSONObject();
             nodes.put(node);
             node.put("id", getIntegerID(dev));
-            // Devices in ONOS are by default switches (hosts are a separate category),
-            // which is EXACTLY what we need
+            // Devices in ONOS are by default switches (hosts are a separate category)OA
+	    
+	    if (middleboxes.contains(new Integer(vertex_index))) {
+		node.put("hasMbox", "true");
+	    }
+	    
             node.put("services", "switch");
-            // We need resources to be present, but for now we are not extracting any info
-            // from ONOS
+            // We need resources to be present, but for now we are not extracting any info from ONOS
             node.put("resources", new JSONObject());
             // TODO: Put resources of nodes, if any, like CPU  @victor
             // TODO: extract middlebox info from ONOS somehow? @victor
@@ -297,6 +410,8 @@ public final class SolServiceImpl implements SolService {
             int dstid = getIntegerID(((DefaultTopologyVertex) e.dst()).deviceId());
             link.put("source", srcid);
             link.put("target", dstid);
+	    link.put("srcname", srcid);
+	    link.put("dstname", dstid);
             JSONObject resources = new JSONObject();
             link.put("resources", resources);
             ConnectPoint edge_link_src = (((DefaultTopologyEdge) e).link()).src();
@@ -317,14 +432,6 @@ public final class SolServiceImpl implements SolService {
      * @param url the url of the endpoint.
      */
     private void sendTopology(String url, JSONObject topo) {
-
-        //POSTing to a dummy server, uncomment to post to SOL server
-//	try {
-//	    HttpResponse<com.mashape.unirest.http.JsonNode> sup = Unirest.post("http://localhost:7500").body(topoj).asJson();
-//	    log.info("Successfully POSTed topology to dummy server");
-//	} catch (UnirestException e) {
-//	    e.printStackTrace();
-//	}
 
         // Send request to the specified URL as a HTTP POST request.
         HttpResponse resp = null;
@@ -373,12 +480,21 @@ public final class SolServiceImpl implements SolService {
         HashMap<TrafficClass, Integer> tc_ids = new HashMap<>();
         int tc_counter = 0;
         JSONArray applist = new JSONArray();
+	ArrayList<Integer> all_middleboxes = new ArrayList<Integer>();
         for (ApplicationId appid : optimizations.keySet()) {
             JSONObject app = new JSONObject();
             applist.put(app);
             app.put("id", appid.name());
-            //TODO: allow predicate customization in the future @victor
-            app.put("predicate", "null_predicate");
+            app.put("predicate", predicates.get(appid));
+	    List<Integer> curr_middleboxes = middleboxes.get(appid);
+	    if (curr_middleboxes != null) {
+		for (Integer mbid : curr_middleboxes) {
+		    if (!all_middleboxes.contains(mbid)) {
+			all_middleboxes.add(mbid);
+		    }
+		}
+	    }
+		    
             JSONObject opnode = optimizations.get(appid).toJSONnode();
             for (String key : JSONObject.getNames(opnode)) {
                 app.put(key, opnode.get(key));
@@ -392,7 +508,7 @@ public final class SolServiceImpl implements SolService {
             app.put("traffic_classes", tc_list);
         }
         composeObject.put("apps", applist);
-        composeObject.put("topology", topologyToJson());
+        composeObject.put("topology", topologyToJson(all_middleboxes));
 
         // Send request to the specified URL as a HTTP POST request.
         try {
@@ -461,20 +577,26 @@ public final class SolServiceImpl implements SolService {
     private List<Link> create_links(JSONArray pathnodes) {
         List<Link> link_list = new ArrayList<Link>();
 
-	//        JSONObject prev_node = null;
 	int prev_id = -1;
 	int curr_id = -1;
         for (int i = 0; i < pathnodes.length(); i++) {
-	    //            JSONObject node = pathnodes.getJSONObject(i);
             if (prev_id == -1) {
-		//               prev_node = node;
 		prev_id = pathnodes.getInt(i);
+
+		// Get the Host that will start the path		
+		Host start_host = null;
+		Set<Host> conhosts = hostService.getConnectedHosts(linkMap.get(prev_id));
+		if (conhosts.size() != 1) {
+		    log.error("Problem Finding the Hosts with the HostService!");
+		}
+			
+		for (Host chost : conhosts) {
+		    start_host = chost;
+		    break;
+		}
+		link_list.add(DefaultEdgeLink.createEdgeLink(start_host, true));
                 continue;
             } else {
-		//                DefaultLink.Builder link_builder =
-		//                        DefaultLink.builder();
-		//                int prev_id = prev_node.getInt("id");
-		//                int curr_id = node.getInt("id");
 		curr_id = pathnodes.getInt(i);
 		
                 DeviceId prev_dev = linkMap.get(prev_id);
@@ -627,6 +749,8 @@ public final class SolServiceImpl implements SolService {
                 JSONObject pathobj = paths.getJSONObject(0);
                 JSONArray pathnodes = pathobj.getJSONArray("nodes");
 		DefaultAnnotations.Builder annotations_builder = DefaultAnnotations.builder();
+		// TODO: provider ID could be incorrect
+		// TODO: translation from paths to flows can be incorrect (create_links_pathnodes?)
                 DefaultPath curr_path =
 		    new DefaultPath(provider_id, create_links(pathnodes), 1.0, annotations_builder.build());
                 intent_builder.path(curr_path);

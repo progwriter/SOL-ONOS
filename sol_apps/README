@@ -1,0 +1,9 @@
+- This directory is used for SDN apps that are written using SOL/Chopin API
+
+- Currently trying to look into what kind of other Apps this API can/can't support
+
+Current Apps:
+- Traffic Engineering: written
+- Service Chaining: written
+- Load Balancer:
+- Power Saver: 
