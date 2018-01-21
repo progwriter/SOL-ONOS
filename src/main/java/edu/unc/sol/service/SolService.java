@@ -9,11 +9,17 @@ import org.onosproject.net.DeviceId;
 import java.util.List;
 
 public interface SolService {
-    public void registerApp(ApplicationId id, List<TrafficClass> trafficClasses, Optimization opt,
-			    PathUpdateListener listener, String predicate, List<Integer> middleboxes);
-    public void unregisterApp(ApplicationId id);
-//    public void updateTrafficClasses(ApplicationId id, List<TrafficClass> trafficClasses);
-//    public void addListener(ApplicationId id, PathUpdateListener listener);
-//    public void removeListener(ApplicationId id, PathUpdateListener listener);
-    public int getIntegerID(DeviceId id);
+  public void registerApp(
+      ApplicationId id,
+      List<TrafficClass> trafficClasses,
+      Optimization opt,
+      PathUpdateListener listener,
+      String predicate,
+      List<Integer> middleboxes);
+
+  public void unregisterApp(ApplicationId id);
+  //    public void updateTrafficClasses(ApplicationId id, List<TrafficClass> trafficClasses);
+  //    public void addListener(ApplicationId id, PathUpdateListener listener);
+  //    public void removeListener(ApplicationId id, PathUpdateListener listener);
+  public int getIntegerID(DeviceId id);
 }
