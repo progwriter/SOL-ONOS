@@ -1,4 +1,4 @@
-package service;
+package edu.unc.sol.service;
 
 import edu.unc.sol.app.TrafficClass;
 import edu.unc.sol.service.TrafficClassDecomposer;

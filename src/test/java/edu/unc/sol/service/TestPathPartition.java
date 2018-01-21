@@ -1,4 +1,4 @@
-package service;
+package edu.unc.sol.service;
 
 import org.junit.Assert;
 import org.junit.Test;
