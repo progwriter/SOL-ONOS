@@ -11,6 +11,7 @@
 
     <artifactId>sol-onos-sc-app</artifactId>
     <version>1.0</version>
+    <packaging>jar</packaging>
 
     <properties>
         <onos.app.name>edu.unc.sol-sc-app</onos.app.name>

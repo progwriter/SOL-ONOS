@@ -20,6 +20,7 @@
 
     <artifactId>sol-onos-service</artifactId>
     <version>1.1</version>
+    <packaging>jar</packaging>
 
     <build>
         <plugins>
