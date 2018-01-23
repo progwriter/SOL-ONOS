@@ -12,6 +12,16 @@
     <artifactId>sol-onos-sc-app</artifactId>
     <version>1.0</version>
 
+    <properties>
+        <onos.app.name>edu.unc.sol-sc-app</onos.app.name>
+        <onos.app.title>SDN SC App</onos.app.title>
+        <onos.app.origin>University of North Carolina at Chapel Hill</onos.app.origin>
+        <onos.app.category>Utility</onos.app.category>
+        <onos.app.url>http://cs.unc.edu/~victor/</onos.app.url>
+        <onos.app.readme>SOL Service chaining application</onos.app.readme>
+    </properties>
+
+
     <build>
         <plugins>
             <plugin>
